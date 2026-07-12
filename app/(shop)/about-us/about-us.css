@@ -1,0 +1,342 @@
+/* ── About Us page — scoped to .about-page__* classes only ── */
+
+.about-page {
+  background-image: url('/assets/brand/about-us-background.jpg');
+  background-repeat: repeat-y;
+  background-size: 100% auto;
+  background-position: top center;
+}
+
+/* ── Shared section container ── */
+.about-page__section {
+  display: grid;
+  align-items: center;
+  column-gap: clamp(28px, 4vw, 64px);
+  row-gap: 20px;
+  width: var(--content-wide, min(1320px, calc(100vw - 72px)));
+  margin: 0 auto;
+  padding-top: clamp(52px, 5.5vw, 88px);
+  padding-bottom: clamp(52px, 5.5vw, 88px);
+}
+
+/* ── Section 1: title top-left, text card bottom-left, asset spans right ── */
+.about-page__section--one {
+  grid-template-areas:
+    "title    asset"
+    "textcard asset";
+  grid-template-columns: 5fr 7fr;
+  grid-template-rows: auto 1fr;
+}
+
+.about-page__section--one > .about-page__title     { grid-area: title; }
+.about-page__section--one > .about-page__text-card  { grid-area: textcard; }
+.about-page__section--one > .about-page__asset-col  { grid-area: asset; align-self: center; }
+
+/* ── Section 2: asset spans left, title top-right, text card bottom-right ── */
+.about-page__section--two {
+  grid-template-areas:
+    "asset title"
+    "asset textcard";
+  grid-template-columns: 7fr 5fr;
+  grid-template-rows: auto 1fr;
+}
+
+.about-page__section--two > .about-page__title     { grid-area: title; align-self: end; padding-bottom: 4px; }
+.about-page__section--two > .about-page__asset-col  { grid-area: asset; align-self: center; }
+.about-page__section--two > .about-page__text-card  { grid-area: textcard; }
+
+/* ── Section 3: title top-left, text card bottom-left, photo spans right ── */
+.about-page__section--three {
+  grid-template-areas:
+    "title    photo"
+    "textcard photo";
+  grid-template-columns: 5fr 7fr;
+  grid-template-rows: auto 1fr;
+}
+
+.about-page__section--three > .about-page__title     { grid-area: title; }
+.about-page__section--three > .about-page__text-card  { grid-area: textcard; }
+.about-page__section--three > .about-page__asset-col  {
+  grid-area: photo;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Section title ── */
+.about-page__title {
+  margin: 0;
+  font-family: var(--title-font);
+  font-size: clamp(32px, 3.5vw, 52px);
+  font-weight: 400;
+  color: var(--pink);
+  line-height: 1.1;
+}
+
+/* ── Text card ── */
+.about-page__text-card {
+  background: #fff;
+  border: 3.5px solid var(--pink-line);
+  border-radius: 24px;
+  padding: clamp(24px, 2.6vw, 40px);
+  min-height: 280px;
+  color: var(--text);
+  font-family: var(--title-font);
+  font-size: clamp(14px, 1.1vw, 17px);
+  line-height: 1.7;
+  transition: box-shadow var(--motion-fast) var(--ease-soft);
+}
+
+.about-page__text-card:hover {
+  box-shadow: 0 4px 20px rgba(255, 143, 202, 0.14);
+}
+
+.about-page__text-card p:first-child { margin-top: 0; }
+.about-page__text-card p:last-child  { margin-bottom: 0; }
+
+/* ── Asset column (holds illustrations or group photo) ── */
+.about-page__asset-col {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Illustration images ── */
+.about-page__asset {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+/* ── Group photo frame (section 3 right col) ── */
+.about-page__group-photo {
+  position: relative;
+  flex: 1;
+  min-height: 320px;
+  width: 100%;
+  background: var(--pink);
+  border-radius: 24px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-family: var(--title-font);
+  font-size: clamp(16px, 1.4vw, 22px);
+}
+
+/* ── Tinh Thần Thương Hiệu ── */
+.about-page__brand-section {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: clamp(40px, 5vw, 80px) clamp(24px, 4vw, 64px);
+}
+
+.about-page__brand-title-image {
+  display: block;
+  width: 100%;
+  max-width: min(940px, 90vw);
+  height: auto;
+  object-fit: contain;
+}
+
+/* ── Spirit cards section ── */
+.about-page__cards-section {
+  width: var(--content-wide, min(1320px, calc(100vw - 72px)));
+  margin: 0 auto;
+  padding-bottom: clamp(56px, 6vw, 96px);
+}
+
+.about-page__spirit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(20px, 2.5vw, 40px);
+}
+
+.about-page__spirit-card-wrap {
+  position: relative;
+}
+
+.about-page__spirit-card {
+  background: var(--pink);
+  border-radius: 28px;
+  min-height: 360px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(24px, 2.5vw, 40px);
+  color: #fff;
+  font-family: var(--title-font);
+  font-size: clamp(14px, 1.1vw, 18px);
+  line-height: 1.5;
+  text-align: center;
+  transition: transform var(--motion-fast) var(--ease-soft), box-shadow var(--motion-fast) var(--ease-soft);
+}
+
+.about-page__spirit-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 30px rgba(255, 162, 211, 0.3);
+}
+
+.about-page__spirit-card p:first-child { margin-top: 0; }
+.about-page__spirit-card p:last-child  { margin-bottom: 0; }
+
+/* Spirit card in image mode — image fills the pink frame exactly (100%) */
+.about-page__spirit-card:has(> .about-page__spirit-image) { padding: 0; overflow: hidden; }
+.about-page__spirit-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+  object-fit: cover;
+  border-radius: 28px;
+}
+
+/* Spirit card in text-over-image mode — image as background, text centered on top */
+.about-page__spirit-card:has(> .about-page__spirit-textimage) { padding: 0; overflow: hidden; display: block; }
+.about-page__spirit-textimage {
+  position: relative;
+  width: 100%;
+  min-height: inherit;
+  border-radius: 28px;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(24px, 2.5vw, 40px);
+  box-sizing: border-box;
+}
+.about-page__spirit-textimage p {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+}
+
+/* ── Sticker decorations ── */
+.about-page__sticker {
+  position: absolute;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+.about-page__sticker--star {
+  width: 72px;
+  height: 72px;
+  top: -22px;
+  left: -16px;
+  z-index: 1;
+}
+
+.about-page__sticker--heart {
+  width: 72px;
+  height: 72px;
+  bottom: -16px;
+  right: -16px;
+  z-index: 1;
+}
+
+/* ── Tablet (≤ 1024px) ── */
+@media (max-width: 1024px) {
+  .about-page__section {
+    column-gap: clamp(20px, 3vw, 40px);
+    width: calc(100vw - 48px);
+    padding-top: clamp(40px, 4.5vw, 64px);
+    padding-bottom: clamp(40px, 4.5vw, 64px);
+  }
+
+  .about-page__cards-section {
+    width: calc(100vw - 48px);
+    padding-bottom: clamp(40px, 5vw, 72px);
+  }
+
+  .about-page__spirit-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .about-page__spirit-card {
+    min-height: 300px;
+  }
+
+  .about-page__text-card {
+    min-height: 240px;
+  }
+
+  .about-page__group-photo {
+    min-height: 280px;
+  }
+}
+
+/* ── Mobile (≤ 640px) ── */
+@media (max-width: 640px) {
+  .about-page__section--one,
+  .about-page__section--two,
+  .about-page__section--three {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    width: calc(100vw - 40px);
+    padding-top: 36px;
+    padding-bottom: 36px;
+    row-gap: 16px;
+  }
+
+  /* Section 1 mobile: title → asset → text card */
+  .about-page__section--one {
+    grid-template-areas:
+      "title"
+      "asset"
+      "textcard";
+  }
+
+  /* Section 2 mobile: title → asset → text card */
+  .about-page__section--two {
+    grid-template-areas:
+      "title"
+      "asset"
+      "textcard";
+  }
+
+  /* Section 3 mobile: title → photo → text card */
+  .about-page__section--three {
+    grid-template-areas:
+      "title"
+      "photo"
+      "textcard";
+  }
+
+  /* Restore single-col asset alignment on mobile */
+  .about-page__section--one > .about-page__asset-col,
+  .about-page__section--two > .about-page__asset-col,
+  .about-page__section--three > .about-page__asset-col {
+    align-self: auto;
+  }
+
+  .about-page__cards-section {
+    width: calc(100vw - 40px);
+    padding-bottom: 48px;
+  }
+
+  .about-page__spirit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .about-page__spirit-card {
+    min-height: 220px;
+  }
+
+  .about-page__text-card {
+    min-height: 160px;
+  }
+
+  .about-page__group-photo {
+    min-height: 200px;
+  }
+
+  .about-page__brand-section {
+    padding: 32px 20px;
+  }
+}

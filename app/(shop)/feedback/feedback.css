@@ -1,0 +1,552 @@
+/* ── Feedback page — scoped to .feedback-page__* classes only ── */
+
+/* ── Page shell ── */
+.feedback-page {
+  background-image: url('/assets/brand/feedback-background.jpg');
+  background-repeat: repeat-y;
+  background-size: 100% auto;
+  background-position: top center;
+  min-height: 100vh;
+}
+
+/* ────────────────────────────────────────────────
+   HERO
+   ──────────────────────────────────────────────── */
+
+.feedback-page__hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: clamp(48px, 6vw, 88px) clamp(24px, 4vw, 64px) clamp(28px, 3.5vw, 52px);
+}
+
+.feedback-page__title-image {
+  display: block;
+  width: 100%;
+  max-width: min(720px, 76vw);
+  height: auto;
+  object-fit: contain;
+  margin-bottom: clamp(16px, 2vw, 28px);
+}
+
+.feedback-page__intro-line {
+  font-family: var(--text-font);
+  font-size: clamp(14px, 1.25vw, 18px);
+  color: var(--text);
+  line-height: 1.6;
+  max-width: min(900px, 82vw);
+  margin: 0 0 6px;
+}
+
+.feedback-page__intro-line--bold {
+  font-family: var(--title-font);
+  font-size: clamp(16px, 1.6vw, 22px);
+  color: var(--pink);
+  font-weight: 400;
+}
+
+/* ────────────────────────────────────────────────
+   CAROUSEL
+   ──────────────────────────────────────────────── */
+
+.feedback-page__carousel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(12px, 2vw, 36px);
+  padding: 0 clamp(16px, 2.5vw, 40px) clamp(12px, 1.5vw, 20px);
+}
+
+.feedback-page__carousel-arrow {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: clamp(36px, 4.5vw, 64px);
+  color: var(--pink);
+  padding: 4px 8px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: transform 0.15s ease, color 0.15s ease, text-shadow 0.15s ease;
+  user-select: none;
+}
+
+.feedback-page__carousel-arrow:hover {
+  color: var(--pink-line);
+  transform: scale(1.2);
+  text-shadow: 0 3px 10px rgba(255, 143, 202, 0.45);
+}
+
+/* Pressed-down feel */
+.feedback-page__carousel-arrow:active {
+  transform: scale(0.86);
+  color: var(--pink-line);
+}
+
+.feedback-page__carousel-arrow:focus-visible {
+  outline: 2px solid var(--pink-line);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+.feedback-page__heart-card {
+  position: relative;
+  width: 100%;
+  max-width: min(700px, 58vw);
+  flex-shrink: 1;
+}
+
+.feedback-page__heart-frame {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  position: relative;
+  z-index: 1; /* sits above the photo so the pink heart outline frames it */
+}
+
+/* Customer photo clipped to the left heart. The mask PNG (FRAM ẢNH - MASK.png)
+   shares the exact 3840×2160 canvas of FRAME ẢNH.png with the left heart painted
+   opaque and everything else transparent — so overlaying the photo across the
+   whole card and masking the full canvas aligns it 1:1 with the frame's heart.
+   object-fit: cover fills the heart; tweak object-position to frame the subject. */
+.feedback-page__heart-photo {
+  --heart-mask: url('/assets/ui/FRAM%20%E1%BA%A2NH%20-%20MASK.png');
+  position: absolute;
+  inset: 0;
+  z-index: 0; /* below the frame; shows through the transparent left heart */
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 38%;
+  -webkit-mask-image: var(--heart-mask);
+  mask-image: var(--heart-mask);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  pointer-events: none;
+}
+
+/* Text sits inside the RIGHT heart of FRAME ẢNH.png. A heart is a curved shape,
+   so the safe text zone is a smaller rectangle inscribed in the heart's widest
+   (upper–middle) band — kept narrow and padded so words never reach the curved
+   edges. Anything that still exceeds the box is clipped by overflow:hidden. */
+.feedback-page__heart-overlay {
+  position: absolute;
+  z-index: 2; /* text stays above both the photo and the frame */
+  /* Centered on the right heart, narrower than its bounding box. */
+  right: 7%;
+  top: 24%;
+  width: 30%;
+  height: 40%;
+  padding: 0 clamp(4px, 0.9vw, 14px);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: clamp(4px, 0.8vw, 10px);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.feedback-page__reviewer-description {
+  font-family: var(--title-font);
+  font-size: clamp(11px, 0.95vw, 15px);
+  font-weight: 400;
+  color: #fff;
+  margin: 0;
+  max-width: 100%;
+  line-height: 1.2;
+  /* Wrap so a word reaching the edge drops to the next line instead of spilling
+     past the heart mask; long unbroken words break too. */
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+/* ── Pagination dots ── */
+.feedback-page__carousel-dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: clamp(20px, 2.5vw, 40px);
+}
+
+.feedback-page__carousel-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--pink-soft);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.feedback-page__carousel-dot--active {
+  background: var(--pink);
+  transform: scale(1.3);
+}
+
+/* ────────────────────────────────────────────────
+   DETAIL PANEL
+   ──────────────────────────────────────────────── */
+
+.feedback-page__detail-panel {
+  width: var(--content-wide, min(1320px, calc(100vw - 72px)));
+  margin: 0 auto clamp(28px, 3.5vw, 52px);
+  background: #fff;
+  border: 3px solid var(--pink-line);
+  border-radius: 24px;
+  padding: clamp(28px, 3.5vw, 56px) clamp(24px, 3vw, 48px);
+  text-align: center;
+}
+
+.feedback-page__detail-title {
+  font-family: var(--title-font);
+  font-size: clamp(22px, 2.5vw, 38px);
+  font-weight: 400;
+  color: var(--pink);
+  margin: 0;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+}
+
+/* ────────────────────────────────────────────────
+   PADLET SECTION
+   ──────────────────────────────────────────────── */
+
+.feedback-page__padlet {
+  position: relative;
+  background-image: url('/assets/brand/4.%20PADLET-background.jpg');
+  background-repeat: repeat;
+  background-size: cover;
+  min-height: 540px;
+  display: flex;
+  justify-content: center;
+  /* large bottom padding reserves space so CTA (position:absolute bottom:0) doesn't overlap heading */
+  padding-top: clamp(80px, 10vw, 144px);
+  padding-bottom: clamp(200px, 28vw, 360px);
+}
+
+.feedback-page__padlet-title {
+  font-family: var(--title-font);
+  font-size: clamp(56px, 9vw, 120px);
+  font-weight: 400;
+  color: var(--pink);
+  margin: 0;
+  line-height: 1;
+  text-align: center;
+  align-self: flex-start;
+}
+
+.feedback-page__cta {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+}
+
+.feedback-page__cta-button {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: block;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+.feedback-page__cta-button:hover {
+  transform: scale(1.03);
+  filter: drop-shadow(0 6px 14px rgba(255, 143, 202, 0.4));
+}
+.feedback-page__cta-button:active {
+  transform: scale(0.96);
+}
+.feedback-page__cta-button:focus-visible {
+  outline: 3px solid var(--pink-line);
+  outline-offset: 4px;
+  border-radius: 16px;
+}
+
+.feedback-page__cta-image {
+  display: block;
+  width: min(400px, 38vw);
+  height: auto;
+}
+
+/* ────────────────────────────────────────────────
+   FEEDBACK SUBMIT MODAL
+   ──────────────────────────────────────────────── */
+.feedback-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(158, 111, 134, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.feedback-modal {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  background: #fff;
+  border: 2.5px solid var(--pink-line);
+  border-radius: 24px;
+  padding: clamp(22px, 4vw, 34px);
+  box-shadow: 0 18px 50px rgba(255, 143, 202, 0.25);
+}
+
+.feedback-modal__close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: var(--pink);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.feedback-modal__title {
+  font-family: var(--title-font);
+  color: var(--pink);
+  font-size: clamp(20px, 3vw, 28px);
+  text-align: center;
+  margin: 0 0 6px;
+}
+
+.feedback-modal__text {
+  font-family: var(--text-font);
+  font-size: 14px;
+  color: var(--text);
+  text-align: center;
+  margin: 0 0 16px;
+}
+
+.feedback-modal__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.feedback-modal__input,
+.feedback-modal__textarea {
+  width: 100%;
+  padding: 13px 16px;
+  border: 2px solid var(--pink-line);
+  border-radius: 14px;
+  font-family: var(--text-font);
+  font-size: 15px;
+  color: var(--text);
+  background: #fff;
+  outline: none;
+  resize: vertical;
+}
+
+.feedback-modal__input::placeholder,
+.feedback-modal__textarea::placeholder {
+  color: #c9a7ba;
+}
+
+.feedback-modal__input:focus,
+.feedback-modal__textarea:focus {
+  border-color: var(--pink);
+  box-shadow: 0 0 0 3px rgba(255, 162, 211, 0.2);
+}
+
+.feedback-modal__error {
+  color: #dc2626;
+  font-family: var(--text-font);
+  font-size: 13px;
+  margin: 0;
+  text-align: center;
+}
+
+/* Image picker + preview */
+.feedback-modal__file {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 16px;
+  border: 2px dashed var(--pink-line);
+  border-radius: 14px;
+  color: var(--pink);
+  font-family: var(--text-font);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.feedback-modal__file:hover { background: rgba(255, 162, 211, 0.1); }
+.feedback-modal__file input { display: none; }
+
+.feedback-modal__preview {
+  position: relative;
+  align-self: flex-start;
+  max-width: 160px;
+}
+.feedback-modal__preview img {
+  width: 100%;
+  border-radius: 12px;
+  display: block;
+}
+.feedback-modal__preview-remove {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: #dc2626;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.feedback-modal__submit {
+  width: 100%;
+  padding: 13px 18px;
+  border: none;
+  border-radius: 100px;
+  background: var(--pink);
+  color: #fff;
+  font-family: var(--title-font);
+  font-size: 18px;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+.feedback-modal__submit:hover:not(:disabled) { filter: brightness(0.96); }
+.feedback-modal__submit:disabled { opacity: 0.65; cursor: default; }
+
+.feedback-modal__done {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: center;
+}
+
+/* ────────────────────────────────────────────────
+   HEART DIVIDER STRIP
+   ──────────────────────────────────────────────── */
+
+.feedback-page__heart-divider {
+  display: flex;
+  overflow: hidden;
+  background: #fff;
+  padding: 8px 0;
+  width: 100%;
+  align-items: center;
+}
+
+.feedback-page__heart-divider-icon {
+  width: clamp(40px, 4vw, 56px);
+  height: clamp(40px, 4vw, 56px);
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+/* ────────────────────────────────────────────────
+   TABLET (≤ 1024px)
+   ──────────────────────────────────────────────── */
+
+@media (max-width: 1024px) {
+  .feedback-page__heart-card {
+    max-width: min(540px, 64vw);
+  }
+
+  .feedback-page__detail-panel {
+    width: calc(100vw - 48px);
+  }
+
+  .feedback-page__cta-image {
+    width: min(320px, 40vw);
+  }
+
+  .feedback-page__padlet {
+    padding-bottom: clamp(180px, 32vw, 300px);
+  }
+}
+
+/* ────────────────────────────────────────────────
+   MOBILE (≤ 640px)
+   ──────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .feedback-page__hero {
+    padding: 36px 20px 24px;
+  }
+
+  .feedback-page__title-image {
+    max-width: 86vw;
+  }
+
+  .feedback-page__intro-line {
+    max-width: 90vw;
+  }
+
+  .feedback-page__carousel {
+    gap: 6px;
+    padding: 0 6px 12px;
+  }
+
+  .feedback-page__carousel-arrow {
+    font-size: clamp(28px, 6vw, 40px);
+    padding: 4px;
+  }
+
+  .feedback-page__heart-card {
+    max-width: calc(100vw - 72px);
+  }
+
+  .feedback-page__heart-overlay {
+    right: 6%;
+    top: 22%;
+    width: 34%;
+    height: 46%;
+  }
+
+  .feedback-page__reviewer-description {
+    font-size: clamp(9px, 2.1vw, 13px);
+  }
+
+  .feedback-page__detail-panel {
+    width: calc(100vw - 40px);
+    padding: 20px 16px;
+  }
+
+  .feedback-page__detail-title {
+    font-size: clamp(18px, 4.5vw, 26px);
+  }
+
+  .feedback-page__padlet {
+    min-height: 360px;
+    padding-top: 52px;
+    padding-bottom: clamp(160px, 38vw, 240px);
+  }
+
+  .feedback-page__padlet-title {
+    font-size: clamp(44px, 12vw, 72px);
+  }
+
+  .feedback-page__cta-image {
+    width: min(220px, 52vw);
+  }
+
+  .feedback-page__heart-divider-icon {
+    width: 36px;
+    height: 36px;
+  }
+}

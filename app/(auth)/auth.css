@@ -1,0 +1,193 @@
+.auth-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    background: #fff;
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 460px;
+    border: 2.5px solid var(--pink-line);
+    border-radius: 28px;
+    padding: clamp(24px, 4vw, 40px);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    box-shadow: 0 12px 40px rgba(255, 143, 202, 0.12);
+}
+
+.auth-card__logo {
+    align-self: center;
+    display: inline-flex;
+    margin-bottom: 4px;
+}
+
+.auth-card__title {
+    font-family: var(--title-font);
+    color: var(--pink);
+    font-size: clamp(20px, 3vw, 26px);
+    text-align: center;
+    margin: 0;
+}
+
+.auth-card__subtitle {
+    font-family: var(--text-font);
+    color: var(--text);
+    font-size: 14px;
+    text-align: center;
+    margin: -6px 0 4px;
+}
+
+/* OAuth buttons */
+.auth-oauth-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    padding: 13px 18px;
+    border-radius: 14px;
+    border: none;
+    background: #f1f1f1;
+    color: #2b2b2b;
+    font-family: var(--text-font);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: filter 0.15s ease;
+}
+
+.auth-oauth-btn:hover:not(:disabled) {
+    filter: brightness(0.97);
+}
+
+.auth-oauth-btn:disabled {
+    opacity: 0.7;
+    cursor: default;
+}
+
+/* Divider "Or" */
+.auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #9aa0a6;
+    font-family: var(--text-font);
+    font-size: 13px;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #e6e6e6;
+}
+
+/* Form fields */
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.auth-input {
+    width: 100%;
+    padding: 15px 18px;
+    border: 2px solid var(--pink-line);
+    border-radius: 16px;
+    font-family: var(--text-font);
+    font-size: 15px;
+    color: var(--text);
+    outline: none;
+    background: #fff;
+}
+
+.auth-input::placeholder {
+    color: #c9a7ba;
+}
+
+.auth-input:focus {
+    border-color: var(--pink);
+    box-shadow: 0 0 0 3px rgba(255, 162, 211, 0.2);
+}
+
+/* Primary submit — pink pill */
+.auth-submit {
+    width: 100%;
+    padding: 14px 18px;
+    border: none;
+    border-radius: 100px;
+    background: var(--pink);
+    color: #fff;
+    font-family: var(--title-font);
+    font-size: 20px;
+    cursor: pointer;
+    transition: filter 0.15s ease;
+}
+
+.auth-submit:hover:not(:disabled) {
+    filter: brightness(0.96);
+}
+
+.auth-submit:disabled {
+    opacity: 0.65;
+    cursor: default;
+}
+
+.auth-recaptcha {
+    display: flex;
+    justify-content: center;
+    margin: 2px 0;
+}
+
+.auth-message {
+    font-family: var(--text-font);
+    font-size: 13px;
+    text-align: center;
+    margin: 0;
+}
+
+.auth-message--error {
+    color: #dc2626;
+}
+
+.auth-message--success {
+    color: #15803d;
+}
+
+.auth-links {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--text-font);
+    font-size: 14px;
+    color: var(--text);
+}
+
+.auth-link {
+    color: var(--pink-line);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.auth-link:hover {
+    text-decoration: underline;
+}
+
+.auth-back {
+    align-self: center;
+    font-family: var(--title-font);
+    color: var(--pink-soft);
+    text-decoration: none;
+    font-size: 16px;
+    margin-top: 2px;
+}
+
+.auth-back:hover {
+    color: var(--pink);
+}

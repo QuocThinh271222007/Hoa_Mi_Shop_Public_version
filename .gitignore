@@ -1,0 +1,16 @@
+node_modules
+.next
+out
+# Never commit real secrets. Ignore every .env variant except the sample.
+.env*
+!.env.example
+.DS_Store
+public/fonts/*.ttf
+public/fonts/*.otf
+# OpenClaw/local backups
+*openclaw-backup*.tar.gz
+*.tar.gz
+# AI workflow runtime/cache
+.trellis/workspace/cache/
+.trellis/workspace/tmp/
+*.ai.local

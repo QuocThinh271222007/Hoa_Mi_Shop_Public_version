@@ -1,0 +1,449 @@
+/* ================================================================
+   shop-navbar.css
+   Scoped styles for global public shop Navbar dropdowns.
+   Portaled to document.body → position:fixed, z-index 2147482500.
+   ================================================================ */
+
+/* ── Reset button when used as icon-link ── */
+button.icon-link--labeled {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  color: inherit;
+}
+button.icon-link--labeled:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* ── Cart badge ── */
+.shop-cart-btn__icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shop-cart-btn__badge {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  background: #e8006e;
+  color: #fff;
+  font-size: 9px;
+  font-family: var(--text-font, Arial, sans-serif);
+  font-weight: 700;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  border: 2px solid var(--pink, #ffa2d3);
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* ================================================================
+   Panel base — shared by both dropdowns
+   ================================================================ */
+.shop-nav-dropdown {
+  background: #ffffff;
+  border: 2.5px solid var(--pink-line, #ff8fca);
+  border-radius: 20px;
+  box-shadow:
+    0 8px 32px rgba(255, 143, 202, 0.22),
+    0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  font-family: var(--text-font, Arial, Helvetica, sans-serif);
+}
+
+.shop-nav-dropdown__title {
+  font-family: var(--title-font, 'DFVN Bagel Fat One', cursive);
+  font-size: 20px;
+  color: var(--pink-line, #ff8fca);
+  text-align: center;
+  padding: 16px 20px 8px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+/* ================================================================
+   Cart preview — filled + empty states
+   ================================================================ */
+.shop-cart-preview {
+  display: flex;
+  flex-direction: column;
+  max-height: min(72vh, 580px);
+}
+
+/* ── Empty state ── */
+.shop-cart-preview__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 20px 20px;
+}
+
+.shop-cart-preview__empty-art {
+  margin-top: 4px;
+  opacity: 0.75;
+  filter: drop-shadow(0 2px 8px rgba(255, 143, 202, 0.35));
+}
+
+.shop-cart-preview__empty-msg {
+  font-size: 14px;
+  color: #b0a0b0;
+  text-align: center;
+  margin: 0;
+}
+
+/* ── Filled: scrollable item list ── */
+.shop-cart-preview__list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 16px 0;
+  min-height: 0;
+}
+
+.shop-cart-preview__list::-webkit-scrollbar {
+  width: 4px;
+}
+.shop-cart-preview__list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.shop-cart-preview__list::-webkit-scrollbar-thumb {
+  background: var(--pink-soft, #fab0d7);
+  border-radius: 4px;
+}
+
+/* ── Item row ── */
+.shop-cart-preview__item {
+  display: grid;
+  grid-template-columns: 72px 1fr auto;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 0;
+  border-bottom: 1px solid #f5dde8;
+}
+.shop-cart-preview__item:last-child {
+  border-bottom: none;
+}
+
+.shop-cart-preview__item-img {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border: 1.5px solid var(--pink-line, #ff8fca);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fef0f8;
+  flex-shrink: 0;
+}
+
+.shop-cart-preview__item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.shop-cart-preview__item-name {
+  font-size: 13px;
+  color: var(--text, #9e6f86);
+  line-height: 1.35;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.shop-cart-preview__item-price {
+  font-size: 12px;
+  color: #b0a0b0;
+}
+
+.shop-cart-preview__item-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 72px;
+}
+
+.shop-cart-preview__item-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #ccc;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+.shop-cart-preview__item-remove:hover {
+  color: var(--pink-line, #ff8fca);
+}
+.shop-cart-preview__item-remove:focus-visible {
+  outline: 2px solid var(--pink-line, #ff8fca);
+  outline-offset: 2px;
+}
+
+/* ── Quantity stepper ── */
+.shop-cart-preview__stepper {
+  display: flex;
+  align-items: center;
+  border: 1.5px solid var(--pink-line, #ff8fca);
+  border-radius: 999px;
+  overflow: hidden;
+  height: 28px;
+}
+
+.shop-cart-preview__stepper-btn {
+  width: 26px;
+  height: 28px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--pink-line, #ff8fca);
+  font-size: 16px;
+  font-weight: bold;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  transition: background 0.12s;
+  padding: 0;
+}
+.shop-cart-preview__stepper-btn:hover {
+  background: var(--pink-soft, #fab0d7);
+  color: #fff;
+}
+.shop-cart-preview__stepper-btn:focus-visible {
+  outline: 2px solid var(--pink-line, #ff8fca);
+  outline-offset: -2px;
+}
+
+.shop-cart-preview__stepper-qty {
+  min-width: 26px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text, #9e6f86);
+  padding: 0 2px;
+  user-select: none;
+}
+
+/* ── Sticky footer ── */
+.shop-cart-preview__footer {
+  flex-shrink: 0;
+  padding: 8px 16px 16px;
+  border-top: 1.5px solid #f5dde8;
+  background: #fff;
+}
+
+.shop-cart-preview__total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--title-font, cursive);
+  font-size: 16px;
+  color: var(--pink-line, #ff8fca);
+  padding: 4px 0 6px;
+}
+
+.shop-cart-preview__divider {
+  border: none;
+  border-top: 1.5px solid #f5dde8;
+  margin: 6px 0 10px;
+}
+
+.shop-cart-preview__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.shop-cart-preview__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  border-radius: 999px;
+  font-family: var(--title-font, cursive);
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+.shop-cart-preview__btn:hover {
+  opacity: 0.85;
+}
+.shop-cart-preview__btn:focus-visible {
+  outline: 2px solid var(--pink-line, #ff8fca);
+  outline-offset: 2px;
+}
+
+.shop-cart-preview__btn--primary {
+  background: var(--pink-line, #ff8fca);
+  color: #fff;
+}
+
+.shop-cart-preview__btn--secondary {
+  background: var(--pink, #ffa2d3);
+  color: #fff;
+}
+
+/* ================================================================
+   Account dropdown — logged in
+   ================================================================ */
+.shop-account-menu {
+  padding-bottom: 8px;
+}
+
+.shop-account-menu__user {
+  text-align: center;
+  font-size: 15px;
+  color: var(--text, #9e6f86);
+  padding: 0 20px 8px;
+  margin: 0;
+  border-bottom: 1.5px solid #f5dde8;
+}
+
+.shop-account-menu__links {
+  display: flex;
+  flex-direction: column;
+  padding-top: 4px;
+}
+
+.shop-account-menu__link {
+  display: block;
+  padding: 10px 24px;
+  font-size: 15px;
+  color: var(--text, #9e6f86);
+  text-decoration: none;
+  transition: background 0.12s;
+}
+.shop-account-menu__link:hover {
+  background: #fff0f8;
+}
+.shop-account-menu__link:focus-visible {
+  outline: 2px solid var(--pink-line, #ff8fca);
+  outline-offset: -2px;
+}
+
+.shop-account-menu__signout {
+  display: block;
+  width: 100%;
+  padding: 10px 24px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 15px;
+  font-family: var(--text-font, Arial, sans-serif);
+  color: var(--pink-line, #ff8fca);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.shop-account-menu__signout:hover {
+  background: #fff0f8;
+}
+.shop-account-menu__signout:focus-visible {
+  outline: 2px solid var(--pink-line, #ff8fca);
+  outline-offset: -2px;
+}
+
+/* ================================================================
+   Auth panel — logged out login form
+   ================================================================ */
+.shop-auth-panel {
+  padding: 0 20px 20px;
+}
+
+.shop-auth-panel__subtitle {
+  font-size: 13px;
+  color: #b0a0b0;
+  text-align: center;
+  margin: 0 0 14px;
+}
+
+.shop-auth-panel__field {
+  margin-bottom: 10px;
+}
+
+.shop-auth-panel__input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid var(--pink-line, #ff8fca);
+  border-radius: 12px;
+  font-size: 14px;
+  color: var(--text, #9e6f86);
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+.shop-auth-panel__input:focus {
+  border-color: var(--pink, #ffa2d3);
+}
+.shop-auth-panel__input::placeholder {
+  color: #ccc;
+}
+
+.shop-auth-panel__error {
+  font-size: 12px;
+  color: #e7006e;
+  margin: 4px 0 8px;
+  text-align: center;
+}
+
+.shop-auth-panel__btn {
+  width: 100%;
+  height: 44px;
+  background: var(--pink-line, #ff8fca);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  font-family: var(--title-font, cursive);
+  font-size: 15px;
+  cursor: pointer;
+  margin: 8px 0 14px;
+  transition: opacity 0.15s;
+}
+.shop-auth-panel__btn:hover {
+  opacity: 0.85;
+}
+.shop-auth-panel__btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.shop-auth-panel__btn:focus-visible {
+  outline: 2px solid var(--pink-line, #ff8fca);
+  outline-offset: 2px;
+}
+
+.shop-auth-panel__links {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: #b0a0b0;
+  text-align: center;
+}
+
+.shop-auth-panel__link {
+  color: var(--pink-line, #ff8fca);
+  font-weight: 600;
+  text-decoration: none;
+}
+.shop-auth-panel__link:hover {
+  text-decoration: underline;
+}
