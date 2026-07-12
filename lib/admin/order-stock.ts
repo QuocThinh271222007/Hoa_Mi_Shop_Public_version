@@ -1,4 +1,19 @@
+import { revalidatePath } from 'next/cache';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin-client';
+
+// Refresh the statically-cached customer surfaces whose "Hết hàng" / add-to-cart
+// state is driven by product.stock. Wrapped so a revalidation hiccup can never
+// break the far more important stock/payment write that precedes it.
+function revalidateStockSurfaces(): void {
+  try {
+    revalidatePath('/products/[slug]', 'page');
+    revalidatePath('/collection', 'page');
+    revalidatePath('/collection/[collectionSlug]', 'page');
+    revalidatePath('/');
+  } catch {
+    /* best-effort: outside a request context revalidatePath is a no-op/throws */
+  }
+}
 
 // SERVER-ONLY. Applies (or reverts) stock for an order's items.
 //   • 'deduct'  — when the order is recorded into fulfilment (COD created,
@@ -50,5 +65,11 @@ export async function applyOrderStock(orderId: string, direction: 'deduct' | 're
       order_id: orderId,
       admin_note: note,
     });
+  }
+
+  // Stock changed → refresh the customer-facing cached pages so availability shows
+  // correctly (e.g. selling out hides the buy button, cancelling restores it).
+  if (list.some((it) => it.product_id && it.quantity)) {
+    revalidateStockSurfaces();
   }
 }

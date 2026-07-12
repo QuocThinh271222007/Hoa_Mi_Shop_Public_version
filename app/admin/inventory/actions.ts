@@ -18,5 +18,14 @@ export async function actionAdjustStock(formData: FormData) {
   if (isNaN(delta) || delta === 0) return;
 
   await adjustStock(productId, delta, reason, adminNote);
+
+  // Stock drives the customer-facing "Hết hàng" / add-to-cart state, which lives on
+  // statically-cached pages. Revalidate those surfaces too — otherwise raising
+  // stock from 0 leaves the product detail button stuck on "Hết hàng".
   revalidatePath('/admin/inventory');
+  revalidatePath('/admin/products');
+  revalidatePath('/products/[slug]', 'page');
+  revalidatePath('/collection', 'page');
+  revalidatePath('/collection/[collectionSlug]', 'page');
+  revalidatePath('/');
 }
