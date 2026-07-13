@@ -8,6 +8,9 @@ import {
 import { CollectionDetailClient } from "./CollectionDetailClient";
 import "../collection.css";
 
+// Live stock/availability on the listing.
+export const revalidate = 0;
+
 type Props = {
   params: Promise<{ collectionSlug: string }>;
 };

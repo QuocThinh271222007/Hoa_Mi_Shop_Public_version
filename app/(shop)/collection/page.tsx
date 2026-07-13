@@ -4,6 +4,9 @@ import { getPublicCollectionsWithProductIds } from '@/lib/shop/collections';
 import { CollectionClient } from './CollectionClient';
 import './collection.css';
 
+// Live stock/availability on the listing.
+export const revalidate = 0;
+
 export default async function CollectionPage() {
   const [products, banners] = await Promise.all([
     getProducts(),

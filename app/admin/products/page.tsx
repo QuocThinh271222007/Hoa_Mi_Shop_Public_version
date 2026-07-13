@@ -42,7 +42,17 @@ function ProductForm({
         </div>
         <div className="admin-form__field">
           <label className="admin-form__label">Tồn kho</label>
-          <input name="stock" type="number" min={0} defaultValue={product?.stock ?? 0} className="admin-form__input" />
+          {product ? (
+            // Edit mode: stock is owned solely by the Inventory page (single source of
+            // truth + audit log). Show it read-only so saving a product edit can never
+            // overwrite an inventory adjustment. Manage stock via /admin/inventory.
+            <>
+              <input type="number" value={product.stock ?? 0} readOnly disabled className="admin-form__input" />
+              <small className="admin-form__hint">Chỉnh tồn kho tại trang <a href="/admin/inventory">Kho hàng</a> (có ghi lịch sử).</small>
+            </>
+          ) : (
+            <input name="stock" type="number" min={0} defaultValue={0} className="admin-form__input" />
+          )}
         </div>
         <div className="admin-form__field">
           <label className="admin-form__label">Ngưỡng tồn thấp</label>

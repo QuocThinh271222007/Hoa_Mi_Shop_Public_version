@@ -591,6 +591,16 @@
   letter-spacing: 0.4px;
 }
 
+.admin-form__hint {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #999;
+}
+.admin-form__hint a {
+  color: var(--pink, #e8689f);
+  font-weight: 600;
+}
+
 .admin-form__input,
 .admin-form__textarea,
 .admin-form__select {

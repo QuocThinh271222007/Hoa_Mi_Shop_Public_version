@@ -88,7 +88,10 @@ export async function actionUpdateProduct(formData: FormData) {
       image_alt:           (formData.get('image_alt') as string | null)?.trim() || null,
       description:         (formData.get('description') as string | null)?.trim() || null,
       category:            (formData.get('category') as string | null)?.trim() || 'Dây áo',
-      stock:               parseInt(formData.get('stock') as string || '0'),
+      // NOTE: `stock` is intentionally NOT written here. Stock is owned solely by the
+      // Inventory page (adjustStock → products.stock + inventory_movements log). Writing
+      // it from this form would overwrite inventory adjustments with a stale field value
+      // and leave no audit trail. See lib/admin/inventory-data.ts.
       low_stock_threshold: parseInt(formData.get('low_stock_threshold') as string || '3'),
       sku:                 (formData.get('sku') as string | null)?.trim() || null,
       is_bestseller:       formData.get('is_bestseller') === 'on',

@@ -4,6 +4,10 @@ import { getProducts, getProductBySlug } from '@/lib/products';
 import { ProductDetailClient } from './ProductDetailClient';
 import './product-detail.css';
 
+// Always render with live stock so admin inventory/stock changes (and sell-outs)
+// reflect immediately — the "Hết hàng"/add-to-cart state must never be stale.
+export const revalidate = 0;
+
 export function generateStaticParams() {
   // Pre-render seeded demo slugs; admin-created products render on demand.
   return demoProducts.map((p) => ({ slug: p.slug }));
