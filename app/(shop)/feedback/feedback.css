@@ -247,6 +247,153 @@
   align-self: flex-start;
 }
 
+.feedback-page__padlet-inner {
+  width: min(1180px, 94%);
+  margin: 0 auto;
+}
+
+/* ── Self-hosted Padlet wall (padlet.com "shelf" look) ── */
+.padlet-board {
+  margin-top: clamp(16px, 2vw, 28px);
+  border-radius: 20px;
+  box-shadow: 0 16px 48px rgba(232, 104, 159, 0.22);
+  overflow: hidden;
+  /* Soft brand gradient board (padlet.com uses a colored board background). */
+  background: linear-gradient(135deg, #ffd9ec 0%, #ffe9d6 45%, #ffd5ea 100%);
+}
+
+.padlet-board__topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 22px;
+  background: rgba(255, 255, 255, 0.55);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(3px);
+}
+
+.padlet-board__avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--pink, #e8689f);
+  color: #fff;
+  font-size: 22px;
+  flex-shrink: 0;
+  box-shadow: 0 3px 8px rgba(232, 104, 159, 0.35);
+}
+
+.padlet-board__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.padlet-board__title {
+  font-family: var(--title-font);
+  font-size: clamp(24px, 3vw, 34px);
+  color: var(--pink, #e8689f);
+  line-height: 1.05;
+}
+
+.padlet-board__subtitle {
+  font-size: 13px;
+  color: #a15b7d;
+}
+
+.padlet-board__count {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #a15b7d;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+/* 4-column grid wall (rows). Capped to ~3 rows tall; anything beyond scrolls
+   vertically with a scrollbar on the right. --padlet-row approximates one card
+   row's height so the cap tracks roughly 3 rows. Reflows to 2/1 cols responsively. */
+.padlet-board__columns {
+  --padlet-row: 240px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  padding: 20px;
+  align-items: start;
+  max-height: calc(var(--padlet-row) * 3 + 16px * 2 + 40px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pink, #e8689f) rgba(255, 255, 255, 0.5);
+}
+
+/* Pink scrollbar (WebKit/Chromium) so the "scroll on the right" is clearly visible. */
+.padlet-board__columns::-webkit-scrollbar {
+  width: 10px;
+}
+.padlet-board__columns::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
+}
+.padlet-board__columns::-webkit-scrollbar-thumb {
+  background: var(--pink, #e8689f);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.padlet-card {
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  background: #fff;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.padlet-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+}
+
+.padlet-card__image {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+.padlet-card__body {
+  padding: 13px 15px;
+}
+
+.padlet-card__title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #333;
+  line-height: 1.3;
+}
+
+.padlet-card__text {
+  margin: 0;
+  font-size: 13px;
+  color: #444;
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.padlet-card__author {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #777;
+  font-style: italic;
+  text-align: right;
+}
+
 .feedback-page__cta {
   position: absolute;
   bottom: 0;
@@ -451,6 +598,27 @@
   align-items: center;
 }
 
+/* Continuous right-to-left marquee. Track holds two identical heart groups and
+   slides by -50% so the loop is seamless. */
+.feedback-page__heart-divider-track {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: max-content;
+  animation: feedback-heart-marquee 40s linear infinite;
+}
+
+@keyframes feedback-heart-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feedback-page__heart-divider-track {
+    animation: none;
+  }
+}
+
 .feedback-page__heart-divider-icon {
   width: clamp(40px, 4vw, 56px);
   height: clamp(40px, 4vw, 56px);
@@ -477,6 +645,10 @@
 
   .feedback-page__padlet {
     padding-bottom: clamp(180px, 32vw, 300px);
+  }
+
+  .padlet-board__columns {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -539,6 +711,12 @@
 
   .feedback-page__padlet-title {
     font-size: clamp(44px, 12vw, 72px);
+  }
+
+  .padlet-board__columns {
+    grid-template-columns: 1fr;
+    padding: 14px;
+    --padlet-row: 200px;
   }
 
   .feedback-page__cta-image {

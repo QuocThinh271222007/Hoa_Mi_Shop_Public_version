@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent, type CSSProperties } from "react";
 import type { FeedbackItem } from "@/lib/feedback/items";
+import type { PadletPost } from "@/lib/feedback/padlet";
 import { truncateWords } from "@/lib/feedback/truncate-words";
 
 // Assets with special characters → plain <img> to avoid Next.js double-encoding
@@ -12,26 +13,121 @@ const HEART_OUTLINE = "/assets/ui/heart-outline.png";
 const HEART_LIKED = "/assets/ui/heart-liked.png";
 
 function HeartDivider() {
+  // Continuous right-to-left marquee. The track holds two identical groups; the
+  // CSS animation translates it by -50% for a seamless loop (see feedback.css).
+  const hearts = Array.from({ length: 20 }, (_, i) =>
+    i % 2 === 0 ? HEART_OUTLINE : HEART_LIKED,
+  );
   return (
     <div className="feedback-page__heart-divider" aria-hidden="true">
-      {Array.from({ length: 28 }, (_, i) => (
+      <div className="feedback-page__heart-divider-track">
+        {[0, 1].map((group) =>
+          hearts.map((src, i) => (
+            <img
+              key={`${group}-${i}`}
+              src={src}
+              alt=""
+              className="feedback-page__heart-divider-icon"
+            />
+          )),
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PadletCard({ p }: { p: PadletPost }) {
+  return (
+    <article className="padlet-card" style={{ background: p.bg_color ?? "#ffffff" }}>
+      {p.image_url && (
+        // eslint-disable-next-line @next/next/no-img-element
         <img
-          key={i}
-          src={i % 2 === 0 ? HEART_OUTLINE : HEART_LIKED}
-          alt=""
-          className="feedback-page__heart-divider-icon"
+          className="padlet-card__image"
+          src={p.image_url}
+          alt={p.image_alt ?? ""}
+          loading="lazy"
         />
-      ))}
+      )}
+      <div className="padlet-card__body">
+        {p.title && <h3 className="padlet-card__title">{p.title}</h3>}
+        {p.body && <p className="padlet-card__text">{p.body}</p>}
+        {p.author_name && (
+          <p className="padlet-card__author">— {p.author_name}</p>
+        )}
+      </div>
+    </article>
+  );
+}
+
+export type PadletBg = {
+  type: string; // 'color' | 'gradient' | 'image'
+  color: string;
+  gradient: string;
+  image: string;
+};
+
+// Build the board background from admin config. Empty → CSS default gradient.
+// Image mode shows the picture as-is (no dim overlay), per requirement.
+function boardBgStyle(bg?: PadletBg): CSSProperties {
+  if (!bg) return {};
+  if (bg.type === "image" && bg.image) {
+    return {
+      backgroundImage: `url("${bg.image}")`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      backgroundRepeat: "no-repeat",
+    };
+  }
+  if (bg.type === "color" && bg.color) return { background: bg.color };
+  if (bg.type === "gradient" && bg.gradient) return { background: bg.gradient };
+  return {};
+}
+
+function PadletWall({
+  posts,
+  heading,
+  bg,
+}: {
+  posts: PadletPost[];
+  heading: string;
+  bg?: PadletBg;
+}) {
+  if (posts.length === 0) return null;
+  // Cards flow into a 4-column grid wall (reflows to 2/1 columns on smaller
+  // screens — see feedback.css), capped to ~3 rows then scrolls.
+  return (
+    <div className="padlet-board" style={boardBgStyle(bg)}>
+      <div className="padlet-board__topbar">
+        <span className="padlet-board__avatar" aria-hidden="true">
+          ♡
+        </span>
+        <div className="padlet-board__heading">
+          <span className="padlet-board__title">{heading}</span>
+          <span className="padlet-board__subtitle">
+            Khoảnh khắc của các nàng cùng Họa Mi
+          </span>
+        </div>
+        <span className="padlet-board__count">{posts.length} bài</span>
+      </div>
+      <div className="padlet-board__columns">
+        {posts.map((p) => (
+          <PadletCard key={p.id} p={p} />
+        ))}
+      </div>
     </div>
   );
 }
 
 export default function FeedbackClient({
   items,
+  padletPosts = [],
   padletTitle,
+  padletBg,
 }: {
   items: FeedbackItem[];
+  padletPosts?: PadletPost[];
   padletTitle?: string;
+  padletBg?: PadletBg;
 }) {
   const FEEDBACK_ITEMS = items;
   const [active, setActive] = useState(0);
@@ -71,13 +167,6 @@ export default function FeedbackClient({
   >("idle");
   const [fbError, setFbError] = useState("");
 
-  // Reject keystrokes that would push the description past 10 words, while
-  // still allowing normal typing (including the trailing space between words).
-  function handleDescriptionChange(next: string) {
-    const wordCount = next.trim() ? next.trim().split(/\s+/).length : 0;
-    if (wordCount <= 10) setFbDescription(next);
-  }
-
   function handlePickImage(file: File | null) {
     setFbError("");
     if (!file) {
@@ -109,17 +198,19 @@ export default function FeedbackClient({
       return;
     }
     if (!fbMessage.trim()) {
-      setFbError("Vui lòng nhập nội dung feedback.");
+      setFbError("Vui lòng nhập nội dung bài đăng.");
       return;
     }
     setFbStatus("submitting");
     try {
       const fd = new FormData();
       fd.set("name", fbName);
-      fd.set("description", fbDescription);
+      fd.set("title", fbDescription); // optional post title
       fd.set("message", fbMessage);
       if (fbImage) fd.set("image", fbImage);
-      const res = await fetch("/api/feedback", { method: "POST", body: fd });
+      // Post to the self-hosted Padlet wall. Server guard requires login
+      // (returns 401 → shown below), checks blacklist, and rate-limits.
+      const res = await fetch("/api/padlet", { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setFbStatus("success");
@@ -233,7 +324,10 @@ export default function FeedbackClient({
 
       {/* ── PADLET section ── */}
       <section className="feedback-page__padlet">
-        <h2 className="feedback-page__padlet-title">{padletHeading}</h2>
+        <div className="feedback-page__padlet-inner">
+          <h2 className="feedback-page__padlet-title">{padletHeading}</h2>
+          <PadletWall posts={padletPosts} heading={padletHeading} bg={padletBg} />
+        </div>
         <div className="feedback-page__cta">
           <button
             type="button"
@@ -277,8 +371,8 @@ export default function FeedbackClient({
               <div className="feedback-modal__done">
                 <h2 className="feedback-modal__title">Cảm ơn nàng ♡</h2>
                 <p className="feedback-modal__text">
-                  Feedback của bạn đã được gửi và đang chờ shop duyệt. Cảm ơn
-                  bạn rất nhiều!
+                  Bài đăng của bạn đã được gửi và đang chờ duyệt. Sau khi được
+                  duyệt, bài sẽ xuất hiện trên tường Padlet. Cảm ơn bạn nhiều nha!
                 </p>
                 <button
                   type="button"
@@ -290,7 +384,7 @@ export default function FeedbackClient({
               </div>
             ) : (
               <>
-                <h2 className="feedback-modal__title">Gửi feedback của bạn</h2>
+                <h2 className="feedback-modal__title">Đăng bài lên Padlet</h2>
                 <form
                   className="feedback-modal__form"
                   onSubmit={handleFeedbackSubmit}
@@ -306,9 +400,10 @@ export default function FeedbackClient({
                   <input
                     className="feedback-modal__input"
                     type="text"
-                    placeholder="Mô tả ngắn (vd: Sinh viên năm 3)"
+                    placeholder="Tiêu đề (không bắt buộc)"
                     value={fbDescription}
-                    onChange={(e) => handleDescriptionChange(e.target.value)}
+                    onChange={(e) => setFbDescription(e.target.value)}
+                    maxLength={120}
                     style={{ fontFamily: "var(--title-font)" }}
                   />
                   <textarea
