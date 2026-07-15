@@ -27,6 +27,7 @@ import { findSePayMatch } from '@/lib/payments/sepay-match';
 import { applyOrderStock } from '@/lib/admin/order-stock';
 import { countDiscountUsageForPaidOrder } from '@/lib/payments/discount-usage';
 import { incrementSePayQuota, currentQuotaMonth } from '@/lib/payments/provider-quota';
+import { sendPurchaseForOrder } from '@/lib/analytics/ga-server';
 
 const WRONG_CONTENT_MESSAGE =
   'Chúng mình đã nhận được một giao dịch nhưng nội dung hoặc số tiền chưa khớp. ' +
@@ -263,6 +264,9 @@ export async function POST(req: NextRequest) {
     // ── Payment confirmed → deduct stock + count discount usage (idempotent) ──
     await applyOrderStock(orderId, 'deduct');
     await countDiscountUsageForPaidOrder(orderId);
+
+    // ── GA4 purchase (server-side, sent exactly once via the dedup guard) ──
+    await sendPurchaseForOrder(db, orderId);
 
     // ── Increment monthly SePay quota — only for requests that were actually
     // eligible for auto-confirm at prepare-time, and only once per payment. ──

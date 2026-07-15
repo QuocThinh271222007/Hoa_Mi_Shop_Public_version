@@ -12,12 +12,14 @@ type CollectionProductCardProps = {
   product: Product;
   isWishlisted: boolean;
   onWishlistToggle: (product: Product) => void;
+  onSelect?: (product: Product) => void;
 };
 
 export function CollectionProductCard({
   product,
   isWishlisted,
   onWishlistToggle,
+  onSelect,
 }: CollectionProductCardProps) {
   const outOfStock = (product.stock ?? 1) <= 0;
   const isNew = product.isNew === true;
@@ -32,6 +34,7 @@ export function CollectionProductCard({
           tabIndex={-1}
           aria-hidden="true"
           style={{ position: 'absolute', inset: 0, zIndex: 1 }}
+          onClick={() => onSelect?.(product)}
         />
 
         <div className="collection-page__card-media">
@@ -74,7 +77,7 @@ export function CollectionProductCard({
         </button>
       </article>
 
-      <Link href={`/products/${product.slug}`} style={{ display: 'block' }}>
+      <Link href={`/products/${product.slug}`} style={{ display: 'block' }} onClick={() => onSelect?.(product)}>
         <div className="collection-page__card-copy">
           <h3 className="collection-page__card-name" title={product.name}>
             {product.name}

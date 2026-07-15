@@ -8,6 +8,7 @@ import { buildVietQrImageUrl } from '@/lib/payments/vietqr';
 import { readShippingConfig } from '@/lib/payments/shipping';
 import { applyOrderStock } from '@/lib/admin/order-stock';
 import { validateCheckoutInput } from '@/lib/validation/checkout';
+import { extractGaIds, sendPurchaseForOrder } from '@/lib/analytics/ga-server';
 import type { CartItem } from '@/lib/types';
 
 /**
@@ -311,6 +312,10 @@ export async function POST(req: NextRequest) {
     const totalAmount     = Math.max(0, subtotal - discount + shippingPayable);
     const shippingAddress = [address, ward, district, province].filter(Boolean).join(', ') || 'Nhận tại cửa hàng';
 
+    // GA4 attribution ids from the browser's _ga cookies — let the server-side
+    // Measurement Protocol purchase join the same GA4 user/session.
+    const { clientId: gaClientId, sessionId: gaSessionId } = extractGaIds(req);
+
     // Create order — always stores authenticated user id
     const { data: order, error: orderErr } = await db
       .from('orders')
@@ -332,7 +337,9 @@ export async function POST(req: NextRequest) {
         payment_status:   'awaiting_payment',
         order_note:       orderNote?.trim() || null,
         status:           'pending',
-      })
+        ga_client_id:     gaClientId,
+        ga_session_id:    gaSessionId,
+      } as never)
       .select('id')
       .single();
 
@@ -374,6 +381,9 @@ export async function POST(req: NextRequest) {
     // Đơn đi thẳng vào orders → deduct stock → thành công.
     if (isCod) {
       await applyOrderStock(orderId, 'deduct');
+      // COD counts as a conversion at placement (marketing measurement). Real
+      // cash collection is signalled later via a separate custom event.
+      await sendPurchaseForOrder(db, orderId);
       return NextResponse.json({
         success:    true,
         cod:        true,
@@ -431,6 +441,8 @@ export async function POST(req: NextRequest) {
       ]);
       // Fully-discounted order is confirmed → deduct stock.
       await applyOrderStock(orderId, 'deduct');
+      // Zero-amount order is confirmed at creation → purchase (value 0).
+      await sendPurchaseForOrder(db, orderId);
       return NextResponse.json({
         success:       true,
         autoCompleted: true,

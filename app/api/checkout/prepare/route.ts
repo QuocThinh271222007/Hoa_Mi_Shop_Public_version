@@ -23,6 +23,7 @@ import {
   buildDynamicQrImageUrl,
   CheckoutError,
 } from '@/lib/payments/checkout-pipeline';
+import { extractGaIds } from '@/lib/analytics/ga-server';
 import type { CartItem } from '@/lib/types';
 
 export async function POST(req: NextRequest) {
@@ -103,6 +104,11 @@ export async function POST(req: NextRequest) {
     // even if the transfer arrives before the customer clicks "Tôi đã chuyển khoản". ──
     const paymentMode = await choosePaymentModeForNewRequest();
 
+    // GA4 attribution ids from the browser's _ga cookies, stored so the
+    // server-side purchase (sent when this order is later confirmed paid) joins
+    // the same GA4 user/session.
+    const { clientId: gaClientId, sessionId: gaSessionId } = extractGaIds(req);
+
     const { data: order, error: orderErr } = await db
       .from('orders')
       .insert({
@@ -124,6 +130,8 @@ export async function POST(req: NextRequest) {
         order_note:               summary.orderNote,
         status:                   'pending',
         payment_code:             paymentCode,
+        ga_client_id:             gaClientId,
+        ga_session_id:            gaSessionId,
         ...(summary.deliveryTime ? { pickup_time: summary.deliveryTime } : {}),
       } as never)
       .select('id')

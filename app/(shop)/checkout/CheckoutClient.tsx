@@ -19,6 +19,14 @@ import {
   DEFAULT_SHIPPING_CONFIG,
   type ShippingConfig,
 } from "@/lib/payments/shipping";
+import {
+  gaBeginCheckout,
+  gaAddShippingInfo,
+  gaAddPaymentInfo,
+  gaOrderCreated,
+  gaRemoveFromCart,
+  toGaItem,
+} from "@/lib/analytics/ga";
 import type { CartItem } from "@/lib/types";
 
 type AppliedCode = {
@@ -341,6 +349,15 @@ export default function CheckoutClient({
   >("idle");
   const [orderMessage, setOrderMessage] = useState("");
 
+  // ── GA4 checkout-journey fire-once guards ──
+  const gaBeginRef = useRef(false);
+  const gaShipRef = useRef(false);
+  const gaPayRef = useRef(false);
+  const gaItems = useCallback(
+    () => items.map((i) => toGaItem(i, i.quantity)),
+    [items],
+  );
+
   // ── Computed ──
   const subtotal = calcTotal(items);
   // Delivery fee = sum of the selected province + district + ward fees.
@@ -590,6 +607,36 @@ export default function CheckoutClient({
     return () => window.removeEventListener(CART_EVENT, onUpdate);
   }, []);
 
+  // GA4 begin_checkout — once, as soon as the cart is known to be non-empty.
+  useEffect(() => {
+    if (gaBeginRef.current || items.length === 0) return;
+    gaBeginRef.current = true;
+    gaBeginCheckout(gaItems(), subtotal);
+  }, [items, subtotal, gaItems]);
+
+  // GA4 add_shipping_info — once, when the shipping step is completed (a valid
+  // delivery address, or a chosen pickup store + time).
+  useEffect(() => {
+    if (gaShipRef.current || items.length === 0) return;
+    const ready =
+      deliveryMode === "pickup"
+        ? !!selectedStore && (timeSlots.length === 0 || !!selectedTime)
+        : addressComplete && !!address.trim();
+    if (!ready) return;
+    gaShipRef.current = true;
+    gaAddShippingInfo(gaItems(), total, deliveryMode);
+  }, [
+    deliveryMode,
+    selectedStore,
+    selectedTime,
+    timeSlots,
+    addressComplete,
+    address,
+    items,
+    total,
+    gaItems,
+  ]);
+
   useEffect(() => {
     if (!dropdownOpen) return;
     const handleOutside = (e: MouseEvent) => {
@@ -749,6 +796,18 @@ export default function CheckoutClient({
     setDiscountSuccess("");
   }, []);
 
+  // Select a payment method and fire GA4 add_payment_info once (first choice).
+  const selectPayment = useCallback(
+    (method: "bank_transfer" | "cod") => {
+      setPaymentMethod(method);
+      if (!gaPayRef.current) {
+        gaPayRef.current = true;
+        gaAddPaymentInfo(gaItems(), total, method);
+      }
+    },
+    [gaItems, total],
+  );
+
   const handlePlaceOrder = useCallback(async () => {
     if (!userId) {
       setOrderMessage(
@@ -796,6 +855,13 @@ export default function CheckoutClient({
 
     setOrderStatus("loading");
     setOrderMessage("");
+
+    // GA4 add_payment_info fallback — if the customer never explicitly clicked a
+    // payment button (used the default), still record the step before placing.
+    if (!gaPayRef.current) {
+      gaPayRef.current = true;
+      gaAddPaymentInfo(gaItems(), total, paymentMethod);
+    }
 
     // Shared form body sent to both /api/checkout (COD/auto) and /api/checkout/prepare (QR).
     const formBody = {
@@ -881,6 +947,10 @@ export default function CheckoutClient({
           // localStorage unavailable — pending page shows minimal fallback
         }
 
+        // GA4 order_created — the order row now exists (awaiting_payment). The
+        // real `purchase` is sent server-side only after payment is confirmed.
+        gaOrderCreated(data.orderId, gaItems(), data.amount ?? total);
+
         // Cart is NOT cleared — kept until payment is confirmed on success page.
         setOrderStatus("success");
         router.push("/checkout/pending?mode=qr");
@@ -903,6 +973,8 @@ export default function CheckoutClient({
 
       // Zero-amount (auto-confirmed) and COD go straight to success.
       if (data.autoCompleted || data.cod) {
+        // GA4 order_created (purchase is also sent server-side for these paths).
+        gaOrderCreated(data.orderId, gaItems(), total);
         clearCart();
         router.push(
           data.redirectTo ?? `/checkout/success?orderId=${data.orderId}`,
@@ -943,6 +1015,8 @@ export default function CheckoutClient({
     paymentMethod,
     appliedCodes,
     router,
+    total,
+    gaItems,
   ]);
 
   const handleBackdropClick = useCallback(
@@ -1412,7 +1486,7 @@ export default function CheckoutClient({
                   <button
                     type="button"
                     className={`checkout-page__payment-button${paymentMethod === "bank_transfer" ? " checkout-page__payment-button--active" : ""}`}
-                    onClick={() => setPaymentMethod("bank_transfer")}
+                    onClick={() => selectPayment("bank_transfer")}
                     aria-pressed={paymentMethod === "bank_transfer"}
                   >
                     <QrIcon />
@@ -1423,7 +1497,7 @@ export default function CheckoutClient({
                   <button
                     type="button"
                     className={`checkout-page__payment-button${paymentMethod === "cod" ? " checkout-page__payment-button--active" : ""}`}
-                    onClick={() => setPaymentMethod("cod")}
+                    onClick={() => selectPayment("cod")}
                     aria-pressed={paymentMethod === "cod"}
                   >
                     <CodIcon />
@@ -1541,7 +1615,10 @@ export default function CheckoutClient({
                         <button
                           type="button"
                           className="checkout-page__remove"
-                          onClick={() => setItems(removeItem(item.id))}
+                          onClick={() => {
+                            gaRemoveFromCart(item, item.quantity);
+                            setItems(removeItem(item.id));
+                          }}
                           aria-label={`Xóa ${item.name}`}
                         >
                           <TrashIcon />

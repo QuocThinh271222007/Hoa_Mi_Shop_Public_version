@@ -7,6 +7,7 @@ import { addItem } from "@/lib/shop/cart-store";
 import { isWishlisted, toggleWishlist } from "@/lib/shop/wishlist-store";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { formatPrice } from "@/lib/demo-products";
+import { gaViewItem, gaAddToCart, gaSelectItem } from "@/lib/analytics/ga";
 import type { Product } from "@/lib/types";
 
 const HEART_OUTLINE = "/assets/ui/heart-outline.png";
@@ -22,6 +23,8 @@ function SuggestionCard({ s }: { s: Product }) {
 
   const handleAdd = useCallback(() => {
     addItem(s, 1);
+    gaSelectItem(s, "product_suggestions", "Gợi ý sản phẩm");
+    gaAddToCart(s, 1);
     setAdded(true);
     setTimeout(() => setAdded(false), 1200);
   }, [s]);
@@ -92,6 +95,11 @@ export function ProductDetailClient({ product, suggestions }: Props) {
   const outOfStock = maxQty <= 0;
   const atMax = qty >= maxQty;
 
+  // GA4 view_item — once per product view.
+  useEffect(() => {
+    gaViewItem(product);
+  }, [product]);
+
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     supabase.auth.getSession().then(({ data }) => {
@@ -105,7 +113,9 @@ export function ProductDetailClient({ product, suggestions }: Props) {
 
   const handleAddToCart = useCallback(() => {
     if (outOfStock) return;
-    addItem(product, Math.min(qty, maxQty));
+    const q = Math.min(qty, maxQty);
+    addItem(product, q);
+    gaAddToCart(product, q);
     setAdded(true);
     setTimeout(() => setAdded(false), 1200);
   }, [product, qty, outOfStock, maxQty]);

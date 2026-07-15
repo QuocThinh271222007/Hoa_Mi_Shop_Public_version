@@ -14,6 +14,7 @@ import { countDiscountUsageForPaidOrder } from '@/lib/payments/discount-usage';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin-client';
 import { applyOrderStock } from '@/lib/admin/order-stock';
 import { generatePaymentCode } from '@/lib/payments/payment-code';
+import { sendPurchaseForOrder, sendRefundForOrder, sendOrderCustomEvent } from '@/lib/analytics/ga-server';
 
 export async function actionUpdateOrderStatus(formData: FormData) {
   await requireAdmin();
@@ -31,6 +32,12 @@ export async function actionUpdatePaymentStatus(formData: FormData) {
   const paymentStatus = formData.get('paymentStatus') as string;
   if (!orderId || !paymentStatus) return;
   await updatePaymentStatus(orderId, paymentStatus);
+  // Admin manually marking an order paid is a payment confirmation → GA4 purchase
+  // (sent exactly once via the dedup guard, so this never double-counts an order
+  // already confirmed by SePay/COD).
+  if (paymentStatus === 'paid') {
+    await sendPurchaseForOrder(createAdminSupabaseClient(), orderId);
+  }
   revalidatePath(`/admin/orders/${orderId}`);
 }
 
@@ -87,6 +94,10 @@ export async function actionMarkRefunded(formData: FormData) {
   await (db.from('orders') as any)
     .update({ payment_status: 'refunded', refunded_at: now, updated_at: now })
     .eq('id', orderId);
+
+  // GA4 refund — sent only here, when money is actually returned (not on a mere
+  // status change to cancelled). Exactly once via orders.ga_refund_sent_at.
+  await sendRefundForOrder(db, orderId);
 
   revalidatePath('/admin/orders');
   revalidatePath(`/admin/orders/${orderId}`);
@@ -164,6 +175,10 @@ export async function actionMarkCodPaid(formData: FormData) {
 
   // Count discount usage now that payment is confirmed (idempotent).
   await countDiscountUsageForPaidOrder(orderId);
+
+  // COD purchase was already counted at placement. Signal actual cash collection
+  // with a separate custom event (revenue truth stays in the database).
+  await sendOrderCustomEvent(db, orderId, 'payment_collected', { method: 'cod' });
 
   revalidatePath('/admin/orders');
   revalidatePath(`/admin/orders/${orderId}`);

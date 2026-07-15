@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useState } from "react";
 import { formatPrice } from "@/lib/demo-products";
 import { addItem } from "@/lib/shop/cart-store";
+import { gaAddToCart } from "@/lib/analytics/ga";
 import type { Product } from "@/lib/types";
 
 type ProductCardProps = {
@@ -38,6 +39,7 @@ export function ProductCard({
     } else {
       if (outOfStock) return;
       addItem(product);
+      gaAddToCart(product, 1);
       setAdded(true);
       setTimeout(() => setAdded(false), 1200);
     }

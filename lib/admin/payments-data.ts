@@ -2,6 +2,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin-client';
 import { countDiscountUsageForPaidOrder } from '@/lib/payments/discount-usage';
 import { paymentCodeMatchesContent } from '@/lib/payments/payment-code';
 import { applyOrderStock } from './order-stock';
+import { sendPurchaseForOrder } from '@/lib/analytics/ga-server';
 import type { AdminPaymentRequest, AdminBankTransaction, AdminPaymentProviderUsage } from './types';
 
 const PR_FIELDS =
@@ -130,6 +131,8 @@ export async function manualMatchTransaction(
   await countDiscountUsageForPaidOrder(orderId);
   // Payment confirmed → order enters fulfilment → deduct stock (idempotent).
   await applyOrderStock(orderId, 'deduct');
+  // GA4 purchase — exactly once via the dedup guard.
+  await sendPurchaseForOrder(db, orderId);
 }
 
 export async function adminMarkPaymentPaid(
@@ -164,6 +167,8 @@ export async function adminMarkPaymentPaid(
   // Count discount usage exactly once now that payment is confirmed (idempotent)
   await countDiscountUsageForPaidOrder(paidOrderId);
   await applyOrderStock(paidOrderId, 'deduct');
+  // GA4 purchase — exactly once via the dedup guard.
+  await sendPurchaseForOrder(db, paidOrderId);
 }
 
 export async function adminMarkPaymentFailed(
@@ -305,6 +310,8 @@ export async function tryMatchTransaction(bankTxnId: string): Promise<boolean> {
   // Count discount usage exactly once now that payment is confirmed (idempotent)
   await countDiscountUsageForPaidOrder(p.order_id);
   await applyOrderStock(p.order_id, 'deduct');
+  // GA4 purchase — exactly once via the dedup guard.
+  await sendPurchaseForOrder(db, p.order_id);
 
   return true;
 }

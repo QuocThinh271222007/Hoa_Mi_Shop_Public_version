@@ -2,9 +2,10 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { readCart, removeItem, updateQuantity, calcTotal, CART_EVENT } from '@/lib/shop/cart-store';
 import { formatPrice } from '@/lib/demo-products';
+import { gaViewCart, gaRemoveFromCart, toGaItem } from '@/lib/analytics/ga';
 import type { CartItem } from '@/lib/types';
 
 // Pre-encoded URLs for filenames with spaces/Vietnamese characters → plain <img>
@@ -22,6 +23,19 @@ export function CartClient() {
     window.addEventListener(CART_EVENT, onUpdate);
     return () => window.removeEventListener(CART_EVENT, onUpdate);
   }, []);
+
+  // GA4 view_cart — once, when the cart contents are first loaded and non-empty.
+  const gaViewedRef = useRef(false);
+  useEffect(() => {
+    if (gaViewedRef.current || items.length === 0) return;
+    gaViewedRef.current = true;
+    gaViewCart(items.map((i) => toGaItem(i, i.quantity)));
+  }, [items]);
+
+  const handleRemove = (item: CartItem) => {
+    gaRemoveFromCart(item, item.quantity);
+    setItems(removeItem(item.id));
+  };
 
   const total = calcTotal(items);
 
@@ -105,7 +119,7 @@ export function CartClient() {
                       <button
                         className="cart-page__remove"
                         type="button"
-                        onClick={() => setItems(removeItem(item.id))}
+                        onClick={() => handleRemove(item)}
                         aria-label={`Xóa ${item.name}`}
                       >
                         X

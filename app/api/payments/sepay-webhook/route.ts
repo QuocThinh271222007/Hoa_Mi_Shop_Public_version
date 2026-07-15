@@ -4,6 +4,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin-client';
 import { incrementSePayQuota, currentQuotaMonth, envFlag } from '@/lib/payments/provider-quota';
 import { countDiscountUsageForPaidOrder } from '@/lib/payments/discount-usage';
 import { paymentCodeMatchesContent } from '@/lib/payments/payment-code';
+import { sendPurchaseForOrder } from '@/lib/analytics/ga-server';
 
 // POST /api/payments/sepay-webhook
 // Receives transaction notifications from SePay.
@@ -317,6 +318,11 @@ async function tryMatchSePayTransaction(
 
   // Count discount usage exactly once now that payment is confirmed (idempotent)
   await countDiscountUsageForPaidOrder(p.order_id);
+
+  // GA4 purchase — server-side, exactly once (dedup via orders.ga_purchase_sent_at).
+  // This is the authoritative purchase for bank-transfer orders: it fires only
+  // after SePay confirms the money arrived, never at order creation.
+  await sendPurchaseForOrder(db, p.order_id);
 
   // Increment monthly quota — only once per payment (idempotency via quota_counted)
   if (!p.quota_counted) {

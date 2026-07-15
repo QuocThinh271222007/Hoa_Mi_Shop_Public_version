@@ -7,6 +7,12 @@ import { CollectionProductCard } from "./CollectionProductCard";
 import { useBannerCarousel } from "@/components/shop/CollectionBannerCarousel/useBannerCarousel";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { getWishlistIds, toggleWishlist } from "@/lib/shop/wishlist-store";
+import {
+  gaViewItemList,
+  gaSelectItem,
+  gaViewPromotion,
+  gaSelectPromotion,
+} from "@/lib/analytics/ga";
 import type { Product } from "@/lib/types";
 import type { PublicBanner } from "@/lib/banners/public-banners";
 import type { PublicCollectionWithProductIds } from "@/lib/shop/collections";
@@ -193,6 +199,48 @@ export function CollectionClient({
   const filterLabel =
     allFilterOptions.find((o) => o.value === filterMode)?.label ?? "Phân Loại";
 
+  // GA4 view_item_list — fire when the visible list changes by filter/collection
+  // (not on every search keystroke). Cap the payload size.
+  useEffect(() => {
+    if (filtered.length === 0) return;
+    gaViewItemList(filtered.slice(0, 30), `collection_${filterMode}`, filterLabel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterMode]);
+
+  // GA4 view_promotion — fire whenever a banner slide becomes visible (banners
+  // carry a clear id + name = promotion).
+  useEffect(() => {
+    if (!banner.current) return;
+    gaViewPromotion(
+      banner.current.id,
+      banner.current.name || "Collection banner",
+      "collection_hero",
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [banner.current?.id]);
+
+  const handleSelectPromotion = useCallback(() => {
+    if (!banner.current) return;
+    gaSelectPromotion(
+      banner.current.id,
+      banner.current.name || "Collection banner",
+      "collection_hero",
+    );
+  }, [banner]);
+
+  const handleSelectItem = useCallback(
+    (product: Product) => {
+      const index = filtered.findIndex((p) => p.id === product.id);
+      gaSelectItem(
+        product,
+        `collection_${filterMode}`,
+        filterLabel,
+        index >= 0 ? index : undefined,
+      );
+    },
+    [filtered, filterMode, filterLabel],
+  );
+
   const showWishlistLogin = filterMode === "wishlist" && !userId;
   const showEmpty = !showWishlistLogin && filtered.length === 0;
 
@@ -247,7 +295,7 @@ export function CollectionClient({
       {/* 2. Pink hero banner — animated carousel of collection banners */}
       <div className="collection-page__hero-banner">
         {banner.current ? (
-          <Link href={currentSlideHref} className="collection-page__hero-slide" aria-label={banner.current.name || "Xem bộ sưu tập"}>
+          <Link href={currentSlideHref} className="collection-page__hero-slide" aria-label={banner.current.name || "Xem bộ sưu tập"} onClick={handleSelectPromotion}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               key={banner.current.id}
@@ -274,7 +322,7 @@ export function CollectionClient({
           </div>
         )}
 
-        <Link href={currentSlideHref} className="collection-page__hero-button">
+        <Link href={currentSlideHref} className="collection-page__hero-button" onClick={handleSelectPromotion}>
           Khám phá Bộ sưu tập →
         </Link>
       </div>
@@ -392,6 +440,7 @@ export function CollectionClient({
                 product={product}
                 isWishlisted={wishlistIds.has(product.id)}
                 onWishlistToggle={handleWishlistToggle}
+                onSelect={handleSelectItem}
               />
             ))
           )}
