@@ -210,8 +210,11 @@
   overflow-x: auto;
   border: 1px solid rgba(255, 162, 211, 0.25);
   border-radius: 10px;
+  transform: scaleY(-1);
 }
-
+.admin-table-wrap table {
+  transform: scaleY(-1); /* lật ngược lại để nội dung hiện đúng chiều */
+}
 .admin-table {
   width: 100%;
   border-collapse: collapse;

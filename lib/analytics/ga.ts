@@ -6,10 +6,24 @@ const CURRENCY = 'VND';
 
 type GtagFn = (command: string, eventName: string, params?: Record<string, unknown>) => void;
 
-function gtag(): GtagFn | null {
-  if (typeof window === 'undefined') return null;
-  const w = window as unknown as { gtag?: GtagFn };
-  return typeof w.gtag === 'function' ? w.gtag : null;
+interface GaWindow {
+  gtag?: GtagFn;
+  dataLayer?: unknown[];
+}
+
+// Robust emit: prefer the real gtag when the GA snippet has defined it, otherwise
+// buffer the call into dataLayer exactly like gtag would. This guarantees events
+// fired before gtag.js finishes loading (e.g. view_item on first paint) are NOT
+// dropped — gtag.js replays every dataLayer entry on init.
+function emit(name: string, params: Record<string, unknown>): void {
+  if (typeof window === 'undefined') return;
+  const w = window as unknown as GaWindow;
+  if (typeof w.gtag === 'function') {
+    w.gtag('event', name, params);
+    return;
+  }
+  w.dataLayer = w.dataLayer || [];
+  w.dataLayer.push(['event', name, params]);
 }
 
 export interface GaItem {
@@ -49,9 +63,7 @@ export function sumValue(items: GaItem[]): number {
 // Generic safe emitter.
 export function gaEvent(name: string, params: Record<string, unknown> = {}): void {
   try {
-    const g = gtag();
-    if (!g) return;
-    g('event', name, params);
+    emit(name, params);
   } catch {
     /* fail silently */
   }
