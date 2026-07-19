@@ -1,4 +1,5 @@
 import { MOCK_POSTS, type BlogPost } from './mock-posts';
+import { DEFAULT_TIME_ZONE } from '@/lib/time';
 
 // Column lists. WITH_TOGGLE adds the detail-image flag; if the migration hasn't
 // been applied yet the query errors and we transparently retry with BASE.
@@ -24,6 +25,7 @@ function mapRow(row: {
   const date = row.published_at ?? row.created_at;
   const d = new Date(date);
   const viDate = d.toLocaleDateString('vi-VN', {
+    timeZone: DEFAULT_TIME_ZONE,
     day: '2-digit',
     month: 'long',
     year: 'numeric',

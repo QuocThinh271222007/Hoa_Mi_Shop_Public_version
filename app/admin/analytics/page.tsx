@@ -11,8 +11,9 @@ import {
 import { AdminShell } from '../_components/AdminShell';
 import { StatCard } from '../_components/StatCard';
 import { TrendChart, BarList } from '@/components/admin/AnalyticsCharts';
+import { formatDateTimeVN } from '@/lib/time';
 
-function fmtDate(s: string) { try { return new Date(s).toLocaleString('vi-VN'); } catch { return s; } }
+function fmtDate(s: string) { try { return formatDateTimeVN(s); } catch { return s; } }
 
 export default async function AdminAnalyticsPage({
   searchParams,

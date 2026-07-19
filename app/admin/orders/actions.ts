@@ -14,7 +14,7 @@ import { countDiscountUsageForPaidOrder } from '@/lib/payments/discount-usage';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin-client';
 import { applyOrderStock } from '@/lib/admin/order-stock';
 import { generatePaymentCode } from '@/lib/payments/payment-code';
-import { sendPurchaseForOrder, sendRefundForOrder, sendOrderCustomEvent } from '@/lib/analytics/ga-server';
+import { sendRefundForOrder, sendOrderCustomEvent } from '@/lib/analytics/ga-server';
 
 export async function actionUpdateOrderStatus(formData: FormData) {
   await requireAdmin();
@@ -31,13 +31,10 @@ export async function actionUpdatePaymentStatus(formData: FormData) {
   const orderId       = formData.get('orderId') as string;
   const paymentStatus = formData.get('paymentStatus') as string;
   if (!orderId || !paymentStatus) return;
+  // updatePaymentStatus routes a 'paid' status through confirmOrderPaid, which
+  // applies stock/discount side effects and the GA4 purchase exactly once.
   await updatePaymentStatus(orderId, paymentStatus);
-  // Admin manually marking an order paid is a payment confirmation → GA4 purchase
-  // (sent exactly once via the dedup guard, so this never double-counts an order
-  // already confirmed by SePay/COD).
-  if (paymentStatus === 'paid') {
-    await sendPurchaseForOrder(createAdminSupabaseClient(), orderId);
-  }
+  revalidatePath('/admin/orders');
   revalidatePath(`/admin/orders/${orderId}`);
 }
 
@@ -94,6 +91,11 @@ export async function actionMarkRefunded(formData: FormData) {
   await (db.from('orders') as any)
     .update({ payment_status: 'refunded', refunded_at: now, updated_at: now })
     .eq('id', orderId);
+
+  // F7 — a completed refund reverses the sale, so return the goods to sellable
+  // stock. Idempotent: only restores if the order had previously been deducted
+  // and not already restored (guarded by inventory_movements).
+  await applyOrderStock(orderId, 'restore');
 
   // GA4 refund — sent only here, when money is actually returned (not on a mere
   // status change to cancelled). Exactly once via orders.ga_refund_sent_at.
@@ -220,6 +222,36 @@ export async function actionCreateOrder(formData: FormData) {
   // Guard: invalid input just bounces back to the form (client validates too).
   if (!customerName || !customerPhone || items.length === 0) {
     redirect('/admin/orders/new?error=1');
+  }
+
+  // Inventory guard: never create a manual order that oversells. applyOrderStock's
+  // deduct clamps at 0 and never fails, so this pre-insert check is the only thing
+  // preventing silent overselling. Mirrors the customer-checkout stock validation
+  // in app/api/checkout/route.ts so both entry points enforce the same rule. Only
+  // items with a real productId are checked; free-text lines (productId === null)
+  // are exempt (no catalog row to validate against).
+  const stockCheckIds = items
+    .map((it) => it.productId)
+    .filter((id): id is string => !!id);
+  if (stockCheckIds.length > 0) {
+    const db = createAdminSupabaseClient();
+    const { data: prodRows } = await db
+      .from('products')
+      .select('id, stock, name')
+      .in('id', stockCheckIds);
+    const stockMap = new Map<string, { stock: number; name: string }>();
+    for (const p of (prodRows ?? []) as { id: string; stock: number | null; name: string }[]) {
+      stockMap.set(p.id, { stock: p.stock ?? 0, name: p.name });
+    }
+    const outOfStock: string[] = [];
+    for (const it of items) {
+      if (!it.productId) continue;
+      const row = stockMap.get(it.productId);
+      if (row && row.stock < it.quantity) outOfStock.push(row.name || it.productName);
+    }
+    if (outOfStock.length > 0) {
+      redirect(`/admin/orders/new?error=stock&names=${encodeURIComponent(outOfStock.join(', '))}`);
+    }
   }
 
   const orderId = await createManualOrder({

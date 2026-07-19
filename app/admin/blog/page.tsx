@@ -6,6 +6,7 @@ import { StatusBadge } from '../_components/StatusBadge';
 import { ImageDropzone } from '@/components/admin/ImageDropzone';
 import { BlogEditor } from '@/components/admin/BlogEditor';
 import { BUCKETS } from '@/lib/admin/storage';
+import { formatDateVN } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
@@ -134,7 +135,7 @@ export default async function AdminBlogPage() {
                 </td>
                 <td>{post.views}</td>
                 <td>{post.sort_order}</td>
-                <td>{new Date(post.created_at).toLocaleDateString('vi-VN')}</td>
+                <td>{formatDateVN(post.created_at)}</td>
                 <td className="admin-table__actions">
                   <form action={toggleAction} style={{ display: 'inline' }}>
                     <input type="hidden" name="id" value={post.id} />

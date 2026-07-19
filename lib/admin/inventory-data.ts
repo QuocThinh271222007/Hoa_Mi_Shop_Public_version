@@ -75,28 +75,17 @@ export async function adjustStock(
   adminNote?: string
 ): Promise<void> {
   const db = createAdminSupabaseClient();
-
-  const { data: product } = await db
-    .from('products')
-    .select('stock')
-    .eq('id', productId)
-    .single();
-
-  const currentStock = (product as { stock: number | null } | null)?.stock ?? 0;
-  const newStock = Math.max(0, currentStock + delta);
-
-  const { error: updateError } = await db
-    .from('products')
-    .update({ stock: newStock, updated_at: new Date().toISOString() })
-    .eq('id', productId);
-
-  if (updateError) throw new Error(updateError.message);
-
-  await db.from('inventory_movements').insert({
-    product_id: productId,
-    delta,
-    stock_after: newStock,
-    reason,
-    admin_note: adminNote ?? null,
+  // Atomic: locks the product row, clamps at 0, and records the ACTUAL applied
+  // delta so the ledger stays consistent (stock_after = prev + delta) even when a
+  // negative adjustment exceeds the current stock (S1). No read-modify-write race.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (db as any).rpc('apply_stock_delta', {
+    p_product_id: productId,
+    p_delta: delta,
+    p_reason: reason,
+    p_order_id: null,
+    p_admin_note: adminNote ?? null,
+    p_reject_if_insufficient: false,
   });
+  if (error) throw new Error(error.message);
 }

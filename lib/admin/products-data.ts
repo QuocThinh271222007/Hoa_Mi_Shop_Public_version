@@ -34,7 +34,22 @@ export async function createProduct(fields: Record<string, unknown>): Promise<st
     .select('id')
     .single();
   if (error) throw new Error(error.message);
-  return (data as { id: string }).id;
+  const id = (data as { id: string }).id;
+
+  // S6 — record the opening balance in the ledger so movements reconcile to the
+  // current stock. The product row already carries the initial stock, so this only
+  // logs it (no stock change).
+  const openingStock = typeof fields.stock === 'number' ? (fields.stock as number) : 0;
+  if (id && openingStock > 0) {
+    await db.from('inventory_movements').insert({
+      product_id: id,
+      delta: openingStock,
+      stock_after: openingStock,
+      reason: 'opening_stock',
+      admin_note: 'Tồn kho khởi tạo khi tạo sản phẩm',
+    });
+  }
+  return id;
 }
 
 export async function updateProduct(id: string, fields: Record<string, unknown>): Promise<void> {

@@ -2,6 +2,7 @@ import { redirect, notFound } from 'next/navigation';
 import { requireAdmin } from '@/lib/admin/auth-check';
 import { getCustomerById, getCustomerOrders, getCustomerWishlistCount } from '@/lib/admin/customers-data';
 import { AdminShell } from '../../_components/AdminShell';
+import { formatDateVN } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +39,7 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
           <dt>Ngày sinh</dt><dd>{customer.birthday || '-'}</dd>
           <dt>Giới tính</dt><dd>{customer.gender || '-'}</dd>
           <dt>Wishlist</dt><dd>{wishlistCount} sản phẩm</dd>
-          <dt>Ngày đăng ký</dt><dd>{new Date(customer.created_at).toLocaleDateString('vi-VN')}</dd>
+          <dt>Ngày đăng ký</dt><dd>{formatDateVN(customer.created_at)}</dd>
         </dl>
       </div>
 
@@ -56,7 +57,7 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
                 <td>{o.status}</td>
                 <td>{o.payment_status || '-'}</td>
                 <td>{formatVND(o.total_amount)}</td>
-                <td>{new Date(o.created_at).toLocaleDateString('vi-VN')}</td>
+                <td>{formatDateVN(o.created_at)}</td>
               </tr>
             ))}
           </tbody>

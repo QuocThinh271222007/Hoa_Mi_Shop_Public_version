@@ -10,8 +10,19 @@ import { actionCreateOrder } from "../actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewOrderPage() {
+export default async function NewOrderPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; names?: string }>;
+}) {
   const { email } = await requireAdmin();
+  const sp = await searchParams;
+  const errorMessage =
+    sp.error === 'stock'
+      ? `Không đủ tồn kho cho: ${sp.names || 'một số sản phẩm'}. Đơn chưa được tạo — vui lòng kiểm tra lại số lượng.`
+      : sp.error
+        ? 'Không thể tạo đơn — vui lòng kiểm tra lại thông tin.'
+        : '';
   type SlotOv = { mode: 'blocked' | 'custom'; custom_times?: string[] | null };
   const [products, storeRows, timeRows, offsetMap, dayOverrides, weekdayRules] = await Promise.all([
     getAllProducts().catch(() => []),
@@ -64,6 +75,11 @@ export default async function NewOrderPage() {
       </header>
 
       <section className="admin-section">
+        {errorMessage && (
+          <p style={{ color: '#dc2626', fontSize: 13, marginBottom: 12 }}>
+            {errorMessage}
+          </p>
+        )}
         <CreateOrderForm
           products={options}
           stores={stores}

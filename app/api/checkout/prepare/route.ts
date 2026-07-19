@@ -213,7 +213,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     if (err instanceof CheckoutError) {
-      return NextResponse.json({ error: err.userMessage }, { status: err.status });
+      return NextResponse.json({ error: err.userMessage, outOfStockIds: err.outOfStockIds }, { status: err.status });
     }
     console.error('checkout/prepare error:', err);
     return NextResponse.json({ error: 'Lỗi máy chủ. Vui lòng thử lại.' }, { status: 500 });

@@ -9,9 +9,10 @@ import {
   actionSoftDeleteComment,
   actionUpdateCommentNote,
 } from './actions';
+import { formatDateVN } from '@/lib/time';
 
 function fmtDate(s: string) {
-  try { return new Date(s).toLocaleDateString('vi-VN'); } catch { return s; }
+  try { return formatDateVN(s); } catch { return s; }
 }
 
 const STATUS_OPTIONS = ['all', 'pending', 'approved', 'hidden', 'spam', 'deleted'];

@@ -25,51 +25,77 @@ function revalidateStockSurfaces(): void {
 const DEDUCT_REASON = 'order_deduct';
 const RESTORE_REASON = 'order_restore';
 
+// Runs the atomic stock RPC (locks the product row, clamps at 0, records the
+// ACTUAL applied delta, idempotent per order+product+reason). Returns the applied
+// delta (0 when it was a no-op / already applied).
+async function applyDelta(
+  db: ReturnType<typeof createAdminSupabaseClient>,
+  productId: string,
+  delta: number,
+  reason: string,
+  orderId: string | null,
+  adminNote: string | null,
+): Promise<number> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (db as any).rpc('apply_stock_delta', {
+    p_product_id: productId,
+    p_delta: delta,
+    p_reason: reason,
+    p_order_id: orderId,
+    p_admin_note: adminNote,
+    p_reject_if_insufficient: false,
+  });
+  if (error) throw new Error(error.message);
+  const row = Array.isArray(data) ? data[0] : data;
+  return (row?.applied_delta ?? 0) as number;
+}
+
 export async function applyOrderStock(orderId: string, direction: 'deduct' | 'restore'): Promise<void> {
   if (!orderId) return;
   const db = createAdminSupabaseClient();
-
-  const { data: existing } = await db
-    .from('inventory_movements')
-    .select('reason')
-    .eq('order_id', orderId)
-    .in('reason', [DEDUCT_REASON, RESTORE_REASON]);
-  const rows = (existing ?? []) as { reason: string }[];
-  const hasDeduct = rows.some((r) => r.reason === DEDUCT_REASON);
-  const hasRestore = rows.some((r) => r.reason === RESTORE_REASON);
-
-  if (direction === 'deduct' && hasDeduct) return;          // already deducted
-  if (direction === 'restore' && (!hasDeduct || hasRestore)) return; // nothing to give back
 
   const { data: items } = await db
     .from('order_items')
     .select('product_id, quantity')
     .eq('order_id', orderId);
-  const list = (items ?? []) as { product_id: string | null; quantity: number }[];
+  const list = ((items ?? []) as { product_id: string | null; quantity: number }[])
+    .filter((it) => it.product_id && it.quantity > 0);
+  if (list.length === 0) return;
 
-  const reason = direction === 'deduct' ? DEDUCT_REASON : RESTORE_REASON;
-  const note = direction === 'deduct' ? 'Trừ kho khi ghi nhận đơn' : 'Hoàn kho khi hủy đơn';
-
-  for (const it of list) {
-    if (!it.product_id || !it.quantity) continue;
-    const delta = direction === 'deduct' ? -it.quantity : it.quantity;
-    const { data: p } = await db.from('products').select('stock').eq('id', it.product_id).single();
-    const cur = (p as { stock: number | null } | null)?.stock ?? 0;
-    const next = Math.max(0, cur + delta);
-    await db.from('products').update({ stock: next, updated_at: new Date().toISOString() }).eq('id', it.product_id);
-    await db.from('inventory_movements').insert({
-      product_id: it.product_id,
-      delta,
-      stock_after: next,
-      reason,
-      order_id: orderId,
-      admin_note: note,
-    });
-  }
-
-  // Stock changed → refresh the customer-facing cached pages so availability shows
-  // correctly (e.g. selling out hides the buy button, cancelling restores it).
-  if (list.some((it) => it.product_id && it.quantity)) {
+  if (direction === 'deduct') {
+    for (const it of list) {
+      const applied = await applyDelta(db, it.product_id!, -it.quantity, DEDUCT_REASON, orderId, 'Trừ kho khi ghi nhận đơn');
+      // S5 — surface an oversell: a real deduct that took less than requested
+      // (applied 0 with an existing movement = idempotent re-run, not a shortfall).
+      if (applied !== 0 && Math.abs(applied) < it.quantity) {
+        console.warn(
+          `[stock] Oversell on order ${orderId}, product ${it.product_id}: requested ${it.quantity}, deducted ${Math.abs(applied)} (stock ran out).`,
+        );
+      }
+    }
     revalidateStockSurfaces();
+    return;
   }
+
+  // Restore — give back EXACTLY what was deducted for this order (S2), read from
+  // the ledger, not the order quantity (which may differ if a deduct was clamped).
+  const { data: deducts } = await db
+    .from('inventory_movements')
+    .select('product_id, delta')
+    .eq('order_id', orderId)
+    .eq('reason', DEDUCT_REASON);
+  const rows = (deducts ?? []) as { product_id: string; delta: number }[];
+  if (rows.length === 0) return; // never deducted → nothing to give back
+
+  const perProduct = new Map<string, number>();
+  for (const r of rows) perProduct.set(r.product_id, (perProduct.get(r.product_id) ?? 0) + r.delta);
+
+  let changed = false;
+  for (const [productId, sumDelta] of perProduct) {
+    const restoreAmount = -sumDelta; // deduct deltas are negative → positive give-back
+    if (restoreAmount <= 0) continue;
+    await applyDelta(db, productId, restoreAmount, RESTORE_REASON, orderId, 'Hoàn kho khi hủy đơn');
+    changed = true;
+  }
+  if (changed) revalidateStockSurfaces();
 }

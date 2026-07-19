@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { requireAdmin } from '@/lib/admin/auth-check';
 import { getCustomers } from '@/lib/admin/customers-data';
 import { AdminShell } from '../_components/AdminShell';
+import { formatDateVN } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,7 +50,7 @@ export default async function AdminCustomersPage({
                 <td>{c.email || '-'}</td>
                 <td>{c.phone || '-'}</td>
                 <td>{c.gender || '-'}</td>
-                <td>{new Date(c.created_at).toLocaleDateString('vi-VN')}</td>
+                <td>{formatDateVN(c.created_at)}</td>
                 <td><a href={`/admin/customers/${c.id}`} className="admin-btn admin-btn--sm admin-btn--ghost">Xem</a></td>
               </tr>
             ))}

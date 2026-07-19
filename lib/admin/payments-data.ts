@@ -1,8 +1,7 @@
 import { createAdminSupabaseClient } from '@/lib/supabase/admin-client';
-import { countDiscountUsageForPaidOrder } from '@/lib/payments/discount-usage';
 import { paymentCodeMatchesContent } from '@/lib/payments/payment-code';
 import { applyOrderStock } from './order-stock';
-import { sendPurchaseForOrder } from '@/lib/analytics/ga-server';
+import { confirmOrderPaid } from '@/lib/payments/confirm-order-paid';
 import type { AdminPaymentRequest, AdminBankTransaction, AdminPaymentProviderUsage } from './types';
 
 const PR_FIELDS =
@@ -36,11 +35,13 @@ export async function getProviderUsageSummary(provider: string, quotaMonth: stri
   const db = createAdminSupabaseClient();
   const { data } = await db
     .from('payment_provider_usage')
-    .select('id, provider, quota_month, auto_quota_limit, auto_success_count, manual_fallback_count, created_at, updated_at')
+    .select('id, provider, quota_month, auto_quota_limit, auto_success_count, manual_fallback_count, manual_adjustment, created_at, updated_at')
     .eq('provider', provider)
     .eq('quota_month', quotaMonth)
     .maybeSingle();
-  return (data as AdminPaymentProviderUsage) ?? null;
+  // Cast via unknown: manual_adjustment is additive (migration
+  // 20260714_provider_usage_manual_adjustment.sql) and not in the generated types.
+  return (data as unknown as AdminPaymentProviderUsage) ?? null;
 }
 
 export async function getPaymentRequestByOrderId(orderId: string): Promise<AdminPaymentRequest | null> {
@@ -88,51 +89,59 @@ export async function manualMatchTransaction(
 ): Promise<void> {
   const db = createAdminSupabaseClient();
 
-  // Fetch both to verify amounts still make sense
   const [txnResult, prResult] = await Promise.all([
-    db.from('bank_transactions').select('id, amount, status').eq('id', transactionId).single(),
-    db.from('payment_requests').select('id, order_id, amount, status').eq('id', paymentRequestId).single(),
+    db.from('bank_transactions').select('id, amount, status, matched_order_id').eq('id', transactionId).single(),
+    db.from('payment_requests').select('id, order_id, amount, status, expires_at').eq('id', paymentRequestId).single(),
   ]);
 
   if (!txnResult.data || !prResult.data) {
-    throw new Error('Transaction or payment request not found.');
+    throw new Error('Không tìm thấy giao dịch hoặc yêu cầu thanh toán.');
+  }
+  const txn = txnResult.data as { id: string; amount: number; status: string; matched_order_id: string | null };
+  const pr  = prResult.data as { id: string; order_id: string; amount: number; status: string; expires_at: string | null };
+
+  // F1 — never re-use a transaction already consumed by (a different) order.
+  if (txn.status === 'matched' || (txn.matched_order_id && txn.matched_order_id !== pr.order_id)) {
+    throw new Error('Giao dịch này đã được khớp với một đơn khác.');
+  }
+  // F2 — the credited amount must equal the amount owed on the order.
+  if (Number(txn.amount) !== Number(pr.amount)) {
+    throw new Error(`Số tiền không khớp: giao dịch ${txn.amount.toLocaleString('vi-VN')}đ, đơn ${pr.amount.toLocaleString('vi-VN')}đ.`);
+  }
+  // F3 — the payment request must still be open (not already paid/cancelled/failed/expired) and not past its expiry.
+  if (!['awaiting_payment', 'awaiting_verification'].includes(pr.status)) {
+    throw new Error(`Yêu cầu thanh toán đang ở trạng thái "${pr.status}", không thể khớp.`);
+  }
+  if (pr.expires_at && new Date(pr.expires_at) < new Date()) {
+    throw new Error('Yêu cầu thanh toán đã hết hạn.');
   }
 
   const now = new Date().toISOString();
 
-  // Update bank_transaction
-  await db.from('bank_transactions').update({
-    status: 'matched',
-    matched_payment_request_id: paymentRequestId,
-    matched_order_id: (prResult.data as { order_id: string }).order_id,
-  }).eq('id', transactionId);
+  // F5 — atomically claim the transaction: the UPDATE only succeeds while it is
+  // still in an unconsumed state, so two concurrent confirmations can't both win.
+  const { data: claimed } = await db
+    .from('bank_transactions')
+    .update({
+      status: 'matched',
+      matched_payment_request_id: paymentRequestId,
+      matched_order_id: pr.order_id,
+      matched_at: now,
+    })
+    .eq('id', transactionId)
+    .in('status', ['unmatched', 'matched_pending_admin'])
+    .select('id')
+    .maybeSingle();
+  if (!claimed) {
+    throw new Error('Giao dịch vừa được xử lý bởi thao tác khác. Vui lòng tải lại trang.');
+  }
 
-  // Update payment_request
-  await db.from('payment_requests').update({
-    status: 'paid',
-    paid_at: now,
-    matched_transaction_id: transactionId,
-    admin_note: adminNote || 'Manually matched by admin',
-    updated_at: now,
-  }).eq('id', paymentRequestId);
-
-  // Update order — payment confirmed advances it to 'confirmed' (Chờ lấy)
-  const orderId = (prResult.data as { order_id: string }).order_id;
-  await db.from('orders').update({
-    payment_status: 'paid',
-    paid_at: now,
-    bank_transaction_id: transactionId,
-    status: 'confirmed',
-    confirmed_at: now,
-    updated_at: now,
-  }).eq('id', orderId);
-
-  // Count discount usage exactly once now that payment is confirmed (idempotent)
-  await countDiscountUsageForPaidOrder(orderId);
-  // Payment confirmed → order enters fulfilment → deduct stock (idempotent).
-  await applyOrderStock(orderId, 'deduct');
-  // GA4 purchase — exactly once via the dedup guard.
-  await sendPurchaseForOrder(db, orderId);
+  // Single, consistent confirmation (order + payment_request + stock + discount + GA).
+  await confirmOrderPaid(db, pr.order_id, {
+    paymentRequestId,
+    transactionId,
+    adminNote: adminNote || 'Manually matched by admin',
+  });
 }
 
 export async function adminMarkPaymentPaid(
@@ -142,33 +151,22 @@ export async function adminMarkPaymentPaid(
   const db = createAdminSupabaseClient();
   const { data: pr } = await db
     .from('payment_requests')
-    .select('id, order_id')
+    .select('id, order_id, status')
     .eq('id', paymentRequestId)
     .single();
-  if (!pr) throw new Error('Payment request not found.');
+  if (!pr) throw new Error('Không tìm thấy yêu cầu thanh toán.');
+  const p = pr as { id: string; order_id: string; status: string };
 
-  const now = new Date().toISOString();
-  await db.from('payment_requests').update({
-    status: 'paid',
-    paid_at: now,
-    admin_note: adminNote || 'Manually confirmed by admin',
-    updated_at: now,
-  }).eq('id', paymentRequestId);
+  // F3 — don't resurrect a cancelled/failed/expired request into a paid order.
+  if (!['awaiting_payment', 'awaiting_verification', 'paid'].includes(p.status)) {
+    throw new Error(`Yêu cầu thanh toán đang ở trạng thái "${p.status}", không thể xác nhận đã thanh toán.`);
+  }
 
-  const paidOrderId = (pr as { order_id: string }).order_id;
-  await db.from('orders').update({
-    payment_status: 'paid',
-    paid_at: now,
-    status: 'confirmed',
-    confirmed_at: now,
-    updated_at: now,
-  }).eq('id', paidOrderId);
-
-  // Count discount usage exactly once now that payment is confirmed (idempotent)
-  await countDiscountUsageForPaidOrder(paidOrderId);
-  await applyOrderStock(paidOrderId, 'deduct');
-  // GA4 purchase — exactly once via the dedup guard.
-  await sendPurchaseForOrder(db, paidOrderId);
+  // Single, consistent confirmation (order + payment_request + stock + discount + GA).
+  await confirmOrderPaid(db, p.order_id, {
+    paymentRequestId,
+    adminNote: adminNote || 'Manually confirmed by admin',
+  });
 }
 
 export async function adminMarkPaymentFailed(
@@ -289,29 +287,24 @@ export async function tryMatchTransaction(bankTxnId: string): Promise<boolean> {
     return false;
   }
 
-  // Matched!
+  // Matched! Atomically claim the transaction first (guards against a concurrent
+  // confirmation consuming the same credit), then confirm the order consistently.
   const now = new Date().toISOString();
-  await db.from('bank_transactions').update({
-    status: 'matched',
-    matched_payment_request_id: p.id,
-    matched_order_id: p.order_id,
-  }).eq('id', bankTxnId);
+  const { data: claimed } = await db
+    .from('bank_transactions')
+    .update({
+      status: 'matched',
+      matched_payment_request_id: p.id,
+      matched_order_id: p.order_id,
+      matched_at: now,
+    })
+    .eq('id', bankTxnId)
+    .in('status', ['unmatched', 'matched_pending_admin'])
+    .select('id')
+    .maybeSingle();
+  if (!claimed) return false;
 
-  await db.from('payment_requests').update({
-    status: 'paid', paid_at: now,
-    matched_transaction_id: bankTxnId, updated_at: now,
-  }).eq('id', p.id);
-
-  await db.from('orders').update({
-    payment_status: 'paid', paid_at: now,
-    bank_transaction_id: bankTxnId, updated_at: now,
-  }).eq('id', p.order_id);
-
-  // Count discount usage exactly once now that payment is confirmed (idempotent)
-  await countDiscountUsageForPaidOrder(p.order_id);
-  await applyOrderStock(p.order_id, 'deduct');
-  // GA4 purchase — exactly once via the dedup guard.
-  await sendPurchaseForOrder(db, p.order_id);
+  await confirmOrderPaid(db, p.order_id, { paymentRequestId: p.id, transactionId: bankTxnId });
 
   return true;
 }

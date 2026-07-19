@@ -3,6 +3,7 @@ import { getConfiguredTimeZone, zonedDayStartUtcIso, zonedDayEndUtcIso } from '@
 import { assertOrderStatus, normalizeOrderStatus, assertOrderPaymentStatus } from '@/lib/orders/order-flow';
 import { generatePaymentCode } from '@/lib/payments/payment-code';
 import { applyOrderStock } from './order-stock';
+import { confirmOrderPaid } from '@/lib/payments/confirm-order-paid';
 import type { AdminOrder, AdminOrderItem } from './types';
 
 const ORDER_FIELDS =
@@ -192,6 +193,28 @@ export async function createManualOrder(input: ManualOrderInput): Promise<string
   const isCod = input.paymentMethod === 'cod';
   const paid = !isCod && input.paid;
 
+  // S4 — validate available stock BEFORE creating the order, so a manual order can
+  // never be created for more units than exist (which would clamp stock to 0).
+  const realItems = input.items.filter((it) => it.productId);
+  if (realItems.length > 0) {
+    const ids = realItems.map((it) => it.productId as string);
+    const { data: prodRows } = await db.from('products').select('id, name, stock').in('id', ids);
+    const stockMap = new Map(
+      ((prodRows ?? []) as { id: string; name: string; stock: number | null }[]).map((p) => [p.id, { name: p.name, stock: p.stock ?? 0 }]),
+    );
+    // Aggregate requested quantity per product (same product may appear twice).
+    const needed = new Map<string, number>();
+    for (const it of realItems) needed.set(it.productId as string, (needed.get(it.productId as string) ?? 0) + it.quantity);
+    const short: string[] = [];
+    for (const [pid, qty] of needed) {
+      const info = stockMap.get(pid);
+      if (!info || info.stock < qty) short.push(`${info?.name ?? pid} (còn ${info?.stock ?? 0}, cần ${qty})`);
+    }
+    if (short.length > 0) {
+      throw new Error(`Không đủ tồn kho: ${short.join(', ')}.`);
+    }
+  }
+
   const { data: order, error } = await db
     .from('orders')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -323,6 +346,15 @@ export async function updatePaymentStatus(orderId: string, paymentStatus: string
   // Guard against writing an out-of-vocabulary payment status.
   assertOrderPaymentStatus(paymentStatus);
 
+  // F4 — marking an order paid MUST apply the same side effects as every other
+  // paid path (deduct stock, count discount, GA purchase). Delegate to the shared
+  // helper instead of writing payment_status directly (which skipped stock/discount
+  // and could oversell).
+  if (paymentStatus === 'paid') {
+    await confirmOrderPaid(db, orderId);
+    return;
+  }
+
   const { data: current } = await db
     .from('orders')
     .select('status, paid_at, confirmed_at, cancelled_at')
@@ -334,15 +366,6 @@ export async function updatePaymentStatus(orderId: string, paymentStatus: string
   };
 
   const updates: Record<string, unknown> = { payment_status: paymentStatus, updated_at: now };
-
-  if (paymentStatus === 'paid') {
-    if (!cur.paid_at) updates.paid_at = now;
-    // Move a still-pending order forward to confirmed (don't regress later states).
-    if (!cur.status || cur.status === 'pending') {
-      updates.status = 'confirmed';
-      if (!cur.confirmed_at) updates.confirmed_at = now;
-    }
-  }
 
   // Cancelled/failed/expired payment must take the order out of "Chờ xác nhận"
   // (unless it has already shipped/delivered).

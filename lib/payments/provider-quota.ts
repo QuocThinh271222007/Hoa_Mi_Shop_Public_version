@@ -64,14 +64,16 @@ export async function choosePaymentModeForNewRequest(): Promise<PaymentModeResul
   const db = createAdminSupabaseClient();
   const { data: usage } = await db
     .from('payment_provider_usage')
-    .select('auto_success_count, auto_quota_limit')
+    .select('auto_success_count, auto_quota_limit, manual_adjustment')
     .eq('provider', providerName)
     .eq('quota_month', quotaMonth)
     .maybeSingle();
 
-  const row = usage as { auto_success_count: number; auto_quota_limit: number } | null;
-  const usedCount      = row?.auto_success_count ?? 0;
+  const row = usage as { auto_success_count: number; auto_quota_limit: number; manual_adjustment: number | null } | null;
   const effectiveLimit = row?.auto_quota_limit ?? quotaLimit;
+  // Effective usage includes the admin reconciliation offset for off-web credits,
+  // so the auto→manual fallback triggers based on REAL remaining quota (F6).
+  const usedCount = Math.max(0, (row?.auto_success_count ?? 0) + (row?.manual_adjustment ?? 0));
 
   if (usedCount < effectiveLimit) {
     return {
@@ -143,13 +145,63 @@ export async function incrementSePayQuota(
 export async function getProviderUsage(
   provider: string,
   quotaMonth: string
-): Promise<{ auto_success_count: number; auto_quota_limit: number; manual_fallback_count: number } | null> {
+): Promise<{ auto_success_count: number; auto_quota_limit: number; manual_fallback_count: number; manual_adjustment: number } | null> {
   const db = createAdminSupabaseClient();
   const { data } = await db
     .from('payment_provider_usage')
-    .select('auto_success_count, auto_quota_limit, manual_fallback_count')
+    .select('auto_success_count, auto_quota_limit, manual_fallback_count, manual_adjustment')
     .eq('provider', provider)
     .eq('quota_month', quotaMonth)
     .maybeSingle();
-  return data as { auto_success_count: number; auto_quota_limit: number; manual_fallback_count: number } | null;
+  return data as { auto_success_count: number; auto_quota_limit: number; manual_fallback_count: number; manual_adjustment: number } | null;
+}
+
+/**
+ * F6 reconciliation. Admin reads the REAL remaining free quota from the SePay
+ * dashboard and enters it here; we store a manual_adjustment offset so both the
+ * admin display and the auto→manual fallback reflect reality. Subsequent
+ * auto-confirms keep decrementing correctly from this corrected baseline.
+ *
+ * manual_adjustment = effectiveLimit − auto_success_count − actualRemaining
+ * (may be negative if we had over-counted). actualRemaining is clamped to
+ * [0, effectiveLimit].
+ */
+export async function reconcileQuotaRemaining(
+  provider: string,
+  quotaMonth: string,
+  actualRemaining: number,
+  defaultLimit: number
+): Promise<void> {
+  const db = createAdminSupabaseClient();
+  const now = new Date().toISOString();
+
+  const { data: existing } = await db
+    .from('payment_provider_usage')
+    .select('id, auto_success_count, auto_quota_limit')
+    .eq('provider', provider)
+    .eq('quota_month', quotaMonth)
+    .maybeSingle();
+  const row = existing as { id: string; auto_success_count: number; auto_quota_limit: number } | null;
+
+  const limit = row?.auto_quota_limit ?? defaultLimit;
+  const auto  = row?.auto_success_count ?? 0;
+  const clampedRemaining = Math.max(0, Math.min(limit, Math.floor(actualRemaining)));
+  const adjustment = limit - auto - clampedRemaining;
+
+  if (row) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (db.from('payment_provider_usage') as any)
+      .update({ manual_adjustment: adjustment, updated_at: now })
+      .eq('id', row.id);
+  } else {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (db.from('payment_provider_usage') as any).insert({
+      provider,
+      quota_month: quotaMonth,
+      auto_quota_limit: limit,
+      auto_success_count: 0,
+      manual_fallback_count: 0,
+      manual_adjustment: adjustment,
+    });
+  }
 }

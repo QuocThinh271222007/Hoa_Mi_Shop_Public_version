@@ -5,6 +5,7 @@ import { getDashboardData, type DashboardData, type AdminProduct, type AdminOrde
 import { AdminShell } from './_components/AdminShell';
 import { StatCard } from './_components/StatCard';
 import { StatusBadge } from './_components/StatusBadge';
+import { formatDateVN } from '@/lib/time';
 
 function formatVND(price: number): string {
   return `${price.toLocaleString('vi-VN')}đ`;
@@ -12,7 +13,7 @@ function formatVND(price: number): string {
 
 function formatDate(dateStr: string): string {
   try {
-    return new Date(dateStr).toLocaleDateString('vi-VN');
+    return formatDateVN(dateStr);
   } catch {
     return dateStr;
   }

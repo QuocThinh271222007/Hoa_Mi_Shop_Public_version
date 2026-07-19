@@ -4,7 +4,7 @@ import { getOrderLifecycleMap } from '@/lib/admin/orders-data';
 import { canAdminConfirmPayment, canAdminMarkFailed } from '@/lib/orders/status-mapping';
 import { AdminShell } from '../_components/AdminShell';
 import { StatusBadge } from '../_components/StatusBadge';
-import { actionManualMatch, actionMarkPaid, actionMarkFailed } from './actions';
+import { actionManualMatch, actionMarkPaid, actionMarkFailed, actionReconcileQuota } from './actions';
 import { currentQuotaMonth } from '@/lib/payments/provider-quota';
 import { formatDateTimeVN } from '@/lib/time';
 
@@ -45,7 +45,11 @@ export default async function AdminPaymentsPage({
 
   const usedCount     = usageSummary?.auto_success_count ?? 0;
   const quotaLimit    = usageSummary?.auto_quota_limit ?? defaultQuotaLimit;
-  const remaining     = Math.max(0, quotaLimit - usedCount);
+  const manualAdjust  = usageSummary?.manual_adjustment ?? 0;
+  // Effective usage/remaining include the admin reconciliation offset (F6) so the
+  // display matches the SePay dashboard and the auto→manual fallback.
+  const effectiveUsed = Math.max(0, usedCount + manualAdjust);
+  const remaining     = Math.max(0, quotaLimit - effectiveUsed);
   const manualCount   = usageSummary?.manual_fallback_count ?? 0;
 
   return (
@@ -64,12 +68,38 @@ export default async function AdminPaymentsPage({
         <h2 className="admin-section__heading">SePay Auto-Confirm Quota — {quotaMonth}</h2>
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 20px', minWidth: 180 }}>
-            <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>Auto-confirmed</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: usedCount >= quotaLimit ? '#dc2626' : '#16a34a' }}>
-              {usedCount} / {quotaLimit}
+            <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>Auto-confirmed (qua web)</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: effectiveUsed >= quotaLimit ? '#dc2626' : '#16a34a' }}>
+              {effectiveUsed} / {quotaLimit}
             </div>
             <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
-              {remaining > 0 ? `Còn lại: ${remaining}` : 'Đã hết quota tháng này'}
+              {remaining > 0 ? `Còn lại thực tế: ${remaining}` : 'Đã hết quota tháng này'}
+            </div>
+            {manualAdjust !== 0 && (
+              <div style={{ fontSize: 10, color: '#d97706', marginTop: 2 }}>
+                Đã điều chỉnh {manualAdjust > 0 ? '+' : ''}{manualAdjust} (giao dịch ngoài web)
+              </div>
+            )}
+          </div>
+
+          {/* F6 — reconcile against the real SePay dashboard number */}
+          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '12px 20px', minWidth: 220 }}>
+            <div style={{ fontSize: 11, color: '#92400e', marginBottom: 6 }}>Đối chiếu quota thực tế</div>
+            <form action={actionReconcileQuota} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input
+                type="number"
+                name="actualRemaining"
+                min={0}
+                max={quotaLimit}
+                defaultValue={remaining}
+                className="admin-form__input admin-form__input--sm"
+                style={{ width: 72 }}
+                aria-label="Số lượt còn lại thực tế theo SePay"
+              />
+              <button type="submit" className="admin-btn admin-btn--sm admin-btn--primary">Lưu</button>
+            </form>
+            <div style={{ fontSize: 10, color: '#b45309', marginTop: 4, maxWidth: 200 }}>
+              Nhập số &quot;còn lại&quot; đọc trên dashboard SePay. Các auto-confirm sau vẫn tự trừ tiếp.
             </div>
           </div>
           <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 20px', minWidth: 180 }}>

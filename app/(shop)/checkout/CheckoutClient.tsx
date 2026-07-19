@@ -902,6 +902,11 @@ export default function CheckoutClient({
         const data = await res.json();
 
         if (!res.ok || !data.ok) {
+          if (res.status === 409 && Array.isArray(data.outOfStockIds) && data.outOfStockIds.length > 0) {
+            let pruned = items;
+            for (const id of data.outOfStockIds as string[]) pruned = removeItem(id);
+            setItems(pruned);
+          }
           setOrderMessage(
             data.error ?? "Không thể chuẩn bị đơn hàng. Vui lòng thử lại.",
           );
@@ -966,6 +971,11 @@ export default function CheckoutClient({
       const data = await res.json();
 
       if (!res.ok || !data.success) {
+        if (res.status === 409 && Array.isArray(data.outOfStockIds) && data.outOfStockIds.length > 0) {
+          let pruned = items;
+          for (const id of data.outOfStockIds as string[]) pruned = removeItem(id);
+          setItems(pruned);
+        }
         setOrderMessage(data.error ?? "Không thể đặt hàng. Vui lòng thử lại.");
         setOrderStatus("error");
         return;

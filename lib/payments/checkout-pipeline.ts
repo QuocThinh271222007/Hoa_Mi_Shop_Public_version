@@ -71,6 +71,7 @@ export class CheckoutError extends Error {
   constructor(
     public readonly userMessage: string,
     public readonly status: number = 400,
+    public readonly outOfStockIds?: string[],
   ) {
     super(userMessage);
   }
@@ -150,10 +151,14 @@ export async function runCheckoutPipeline(
   }
 
   const outOfStock: string[] = [];
+  const outOfStockIds: string[] = [];
   const validatedItems = cart.map((item) => {
     const db_product = item.id && !item.id.startsWith('demo-') ? priceMap.get(item.id) : undefined;
     const unitPrice = db_product ? db_product.price : item.price;
-    if (db_product && db_product.stock < item.quantity) outOfStock.push(db_product.name);
+    if (db_product && db_product.stock < item.quantity) {
+      outOfStock.push(db_product.name);
+      outOfStockIds.push(item.id);
+    }
     return {
       productId:   db_product ? item.id : null,
       productName: item.name,
@@ -166,6 +171,7 @@ export async function runCheckoutPipeline(
     throw new CheckoutError(
       `Một số sản phẩm đã hết hàng hoặc không đủ số lượng: ${outOfStock.join(', ')}.`,
       409,
+      outOfStockIds,
     );
   }
 

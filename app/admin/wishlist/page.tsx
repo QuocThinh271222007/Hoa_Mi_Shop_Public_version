@@ -1,6 +1,7 @@
 import { requireAdmin } from '@/lib/admin/auth-check';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin-client';
 import { AdminShell } from '../_components/AdminShell';
+import { formatDateVN } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,7 +71,7 @@ export default async function AdminWishlistPage() {
               <tr key={w.id}>
                 <td><code style={{ fontSize: '0.75rem' }}>{w.user_id.slice(0, 8)}...</code></td>
                 <td><code style={{ fontSize: '0.75rem' }}>{w.product_id.slice(0, 8)}...</code></td>
-                <td>{new Date(w.created_at).toLocaleDateString('vi-VN')}</td>
+                <td>{formatDateVN(w.created_at)}</td>
               </tr>
             ))}
           </tbody>

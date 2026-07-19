@@ -204,6 +204,7 @@ export async function POST(req: NextRequest) {
     }
 
     const outOfStock: string[] = [];
+    const outOfStockIds: string[] = [];
     const validatedItems = cart.map((item) => {
       const dbProduct = item.id && !item.id.startsWith('demo-') ? priceMap.get(item.id) : undefined;
       // Use the trusted DB price when the product exists; otherwise (demo/fallback
@@ -211,6 +212,7 @@ export async function POST(req: NextRequest) {
       const unitPrice = dbProduct ? dbProduct.price : item.price;
       if (dbProduct && dbProduct.stock < item.quantity) {
         outOfStock.push(dbProduct.name);
+        outOfStockIds.push(item.id);
       }
       return {
         productId:   dbProduct ? item.id : null,
@@ -222,7 +224,7 @@ export async function POST(req: NextRequest) {
 
     if (outOfStock.length > 0) {
       return NextResponse.json(
-        { error: `Một số sản phẩm đã hết hàng hoặc không đủ số lượng: ${outOfStock.join(', ')}.` },
+        { error: `Một số sản phẩm đã hết hàng hoặc không đủ số lượng: ${outOfStock.join(', ')}.`, outOfStockIds },
         { status: 409 }
       );
     }

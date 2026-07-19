@@ -112,6 +112,7 @@ export type AdminPaymentProviderUsage = {
   auto_quota_limit: number;
   auto_success_count: number;
   manual_fallback_count: number;
+  manual_adjustment: number;
   created_at: string;
   updated_at: string;
 };

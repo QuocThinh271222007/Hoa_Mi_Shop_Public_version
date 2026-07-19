@@ -2,9 +2,8 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin-client';
 import { incrementSePayQuota, currentQuotaMonth, envFlag } from '@/lib/payments/provider-quota';
-import { countDiscountUsageForPaidOrder } from '@/lib/payments/discount-usage';
 import { paymentCodeMatchesContent } from '@/lib/payments/payment-code';
-import { sendPurchaseForOrder } from '@/lib/analytics/ga-server';
+import { confirmOrderPaid } from '@/lib/payments/confirm-order-paid';
 
 // POST /api/payments/sepay-webhook
 // Receives transaction notifications from SePay.
@@ -291,7 +290,12 @@ async function tryMatchSePayTransaction(
     return { matched: true, autoConfirmed: false, manualPending: true };
   }
 
-  // sepay_auto — auto-confirm. Update all records (best-effort; no distributed tx).
+  // sepay_auto — auto-confirm. Claim the transaction first, then confirm the order
+  // through the single source of truth so ALL side effects fire together: order→paid,
+  // payment_request→paid, discount counted, STOCK DEDUCTED (+ order_deduct movement),
+  // and GA4 purchase. Previously this branch updated records inline and never called
+  // confirmOrderPaid/applyOrderStock, so SePay auto-confirmed orders were never
+  // stock-deducted and left no inventory_movements row.
   await db.from('bank_transactions').update({
     status:                      'matched',
     matched_payment_request_id:  p.id,
@@ -299,30 +303,17 @@ async function tryMatchSePayTransaction(
     matched_at:                  now,
   }).eq('id', bankTxnId);
 
+  await confirmOrderPaid(db, p.order_id, {
+    paymentRequestId: p.id,
+    transactionId:    bankTxnId,
+  });
+
+  // Webhook-specific payment_request columns not owned by confirmOrderPaid.
   await db.from('payment_requests').update({
-    status:                 'paid',
-    paid_at:                now,
-    matched_transaction_id: bankTxnId,
-    provider_status:        'confirmed',
-    quota_counted:          true,
-    updated_at:             now,
+    provider_status: 'confirmed',
+    quota_counted:   true,
+    updated_at:      now,
   }).eq('id', p.id);
-
-  await db.from('orders').update({
-    payment_status:      'paid',
-    paid_at:             now,
-    bank_transaction_id: bankTxnId,
-    status:              'confirmed',
-    updated_at:          now,
-  }).eq('id', p.order_id);
-
-  // Count discount usage exactly once now that payment is confirmed (idempotent)
-  await countDiscountUsageForPaidOrder(p.order_id);
-
-  // GA4 purchase — server-side, exactly once (dedup via orders.ga_purchase_sent_at).
-  // This is the authoritative purchase for bank-transfer orders: it fires only
-  // after SePay confirms the money arrived, never at order creation.
-  await sendPurchaseForOrder(db, p.order_id);
 
   // Increment monthly quota — only once per payment (idempotency via quota_counted)
   if (!p.quota_counted) {

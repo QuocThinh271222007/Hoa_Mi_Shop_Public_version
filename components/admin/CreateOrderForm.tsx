@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export type ProductOption = { id: string; name: string; price: number; stock: number | null };
 
@@ -9,6 +9,38 @@ type StoreOpt = { id: string; name: string };
 type SlotOverride = { mode: 'blocked' | 'custom'; custom_times?: string[] | null };
 
 function fmt(n: number) { return `${n.toLocaleString('vi-VN')}đ`; }
+
+// ── Pickup-time helpers (mirrored from the customer checkout form) ──
+// Configured slot times are stored VN-style ("8h30", "11h00", "18h00").
+// The detailed picker uses native "HH:MM" values; we convert between the two and
+// derive the [earliest, latest] window from a day's configured times.
+function extractVnMinutes(s: string): number[] {
+  const out: number[] = [];
+  const re = /(\d{1,2})\s*[h:]\s*(\d{2})?/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s ?? '')) !== null) {
+    const hh = parseInt(m[1], 10);
+    const mm = m[2] ? parseInt(m[2], 10) : 0;
+    if (hh <= 23 && mm <= 59) out.push(hh * 60 + mm);
+  }
+  return out;
+}
+const isDateLabel = (s: string) => /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s.trim());
+function parseHHMM(s: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec((s ?? '').trim());
+  if (!m) return null;
+  const hh = parseInt(m[1], 10);
+  const mm = parseInt(m[2], 10);
+  if (hh > 23 || mm > 59) return null;
+  return hh * 60 + mm;
+}
+function minutesToHHMM(m: number): string {
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+// Minutes → VN label used everywhere else in the app ("14h52").
+function minutesToVn(m: number): string {
+  return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`;
+}
 
 export function CreateOrderForm({
   products,
@@ -34,6 +66,7 @@ export function CreateOrderForm({
   const [deliveryMode, setDeliveryMode] = useState<'delivery' | 'pickup'>('delivery');
   const [pickupStore, setPickupStore] = useState<StoreOpt | null>(null);
   const [pickupTime, setPickupTime] = useState('');
+  const [detailTime, setDetailTime] = useState('');
   const [address, setAddress] = useState('');
   const [shippingFee, setShippingFee] = useState(0);
   const [error, setError] = useState('');
@@ -74,6 +107,91 @@ export function CreateOrderForm({
     }
     return slots;
   }, [pickupStore, pickupTimesByStore, pickupOffset, dayOverrides, weekdayRules]);
+
+  // The allowed [earliest, latest] pickup window per date (in minutes), derived
+  // from that date's configured slot times. Constrains the detailed hour:minute
+  // picker so admin can only choose a time inside the window.
+  const pickupWindows = useMemo(() => {
+    const out: Record<string, { minM: number; maxM: number }> = {};
+    if (!pickupStore) return out;
+    const storeTimes = pickupTimesByStore[pickupStore.id] ?? [];
+    const today = new Date();
+    for (let d = pickupOffset.min; d <= pickupOffset.max; d++) {
+      const dayOv = dayOverrides[d];
+      if (dayOv?.mode === 'blocked') continue;
+      const date = new Date(today);
+      date.setDate(today.getDate() + d);
+      const weekday = date.getDay();
+      const wdRule = dayOv ? undefined : weekdayRules[weekday];
+      if (wdRule?.mode === 'blocked') continue;
+      const yyyy = date.getFullYear();
+      const mm = String(date.getMonth() + 1).padStart(2, '0');
+      const dd = String(date.getDate()).padStart(2, '0');
+      const displayDate = `${dd}/${mm}/${yyyy}`;
+      const times =
+        dayOv?.mode === 'custom' && dayOv.custom_times?.length ? dayOv.custom_times :
+        wdRule?.mode === 'custom' && wdRule.custom_times?.length ? wdRule.custom_times :
+        storeTimes;
+      const mins = times.flatMap(extractVnMinutes);
+      if (mins.length === 0) continue;
+      out[displayDate] = { minM: Math.min(...mins), maxM: Math.max(...mins) };
+    }
+    return out;
+  }, [pickupStore, pickupTimesByStore, pickupOffset, dayOverrides, weekdayRules]);
+
+  // The date portion of the selected slot ("11h00 - 01/07/2026" → "01/07/2026").
+  const selectedPickupDate = useMemo(() => {
+    if (!pickupTime) return '';
+    const parts = pickupTime.split(' - ').map((p) => p.trim());
+    const last = parts[parts.length - 1] ?? '';
+    return isDateLabel(last) ? last : '';
+  }, [pickupTime]);
+  const selectedWindow = selectedPickupDate ? pickupWindows[selectedPickupDate] : undefined;
+
+  // Final pickup time submitted: prefer the exact clock time; fall back to the
+  // coarse slot when no window/detail is available.
+  const pickupTimeValue = useMemo(() => {
+    if (!pickupTime) return '';
+    if (detailTime && selectedPickupDate) {
+      return `${minutesToVn(parseHHMM(detailTime) ?? 0)} - ${selectedPickupDate}`;
+    }
+    return pickupTime;
+  }, [pickupTime, detailTime, selectedPickupDate]);
+
+  // Prefill / clamp the detailed clock time whenever the chosen slot changes so it
+  // always starts on a valid value inside the window.
+  useEffect(() => {
+    if (!pickupTime) {
+      setDetailTime('');
+      return;
+    }
+    const parts = pickupTime.split(' - ').map((p) => p.trim());
+    const last = parts[parts.length - 1] ?? '';
+    const w = isDateLabel(last) ? pickupWindows[last] : undefined;
+    const coarse = extractVnMinutes(parts[0] ?? '')[0] ?? null;
+    let m = coarse ?? w?.minM ?? null;
+    if (m != null && w) m = Math.min(Math.max(m, w.minM), w.maxM);
+    setDetailTime(m != null ? minutesToHHMM(m) : '');
+  }, [pickupTime, pickupWindows]);
+
+  // Clamp any manual edit of the detailed time back into the day's window.
+  const handleDetailTimeChange = useCallback(
+    (val: string) => {
+      if (!val) {
+        setDetailTime('');
+        return;
+      }
+      const m = parseHHMM(val);
+      if (m == null) {
+        setDetailTime(val);
+        return;
+      }
+      const w = selectedWindow;
+      const clamped = w ? Math.min(Math.max(m, w.minM), w.maxM) : m;
+      setDetailTime(minutesToHHMM(clamped));
+    },
+    [selectedWindow],
+  );
 
   const subtotal = useMemo(() => items.reduce((s, it) => s + it.unitPrice * it.quantity, 0), [items]);
   const total = subtotal + effectiveFee;
@@ -130,7 +248,7 @@ export function CreateOrderForm({
       <input type="hidden" name="items" value={JSON.stringify(items)} />
       <input type="hidden" name="shippingAddress" value={effectiveAddress} />
       <input type="hidden" name="shippingFee" value={effectiveFee} />
-      <input type="hidden" name="pickupTime" value={isPickup ? pickupTime : ''} />
+      <input type="hidden" name="pickupTime" value={isPickup ? pickupTimeValue : ''} />
 
       <div className="admin-form__grid">
         <div className="admin-form__field">
@@ -210,6 +328,29 @@ export function CreateOrderForm({
                       Cửa hàng này chưa có khung giờ — thêm ở Settings → Thời gian lấy hàng.
                     </span>
                   </>
+                )}
+                {/* Detailed hour:minute picker — appears once a slot is chosen;
+                    constrained to that date's configured [earliest, latest] window. */}
+                {pickupTime && selectedPickupDate && (
+                  <div style={{ marginTop: 10 }}>
+                    <label className="admin-form__label">Giờ lấy hàng chi tiết</label>
+                    <input
+                      type="time"
+                      className="admin-form__input"
+                      value={detailTime}
+                      min={selectedWindow ? minutesToHHMM(selectedWindow.minM) : undefined}
+                      max={selectedWindow ? minutesToHHMM(selectedWindow.maxM) : undefined}
+                      step={60}
+                      onChange={(e) => handleDetailTimeChange(e.target.value)}
+                      style={{ maxWidth: 200 }}
+                    />
+                    {selectedWindow && (
+                      <span style={{ fontSize: 12, color: '#9ca3af', marginTop: 4, display: 'block' }}>
+                        Chỉ nhận trong khung {minutesToVn(selectedWindow.minM)}–
+                        {minutesToVn(selectedWindow.maxM)} ngày {selectedPickupDate}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
             )}

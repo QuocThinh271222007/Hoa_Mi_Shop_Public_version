@@ -3,8 +3,9 @@ import { getSupportMessages } from '@/lib/admin/support-data';
 import { AdminShell } from '../_components/AdminShell';
 import { StatusBadge } from '../_components/StatusBadge';
 import { actionMarkRead, actionMarkResolved, actionUpdateNote, actionArchive } from './actions';
+import { formatDateVN } from '@/lib/time';
 
-function fmtDate(s: string) { try { return new Date(s).toLocaleDateString('vi-VN'); } catch { return s; } }
+function fmtDate(s: string) { try { return formatDateVN(s); } catch { return s; } }
 
 export default async function AdminSupportPage({
   searchParams,

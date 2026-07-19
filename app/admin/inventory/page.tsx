@@ -2,6 +2,7 @@ import { requireAdmin } from '@/lib/admin/auth-check';
 import { getInventoryProducts, stockStatus, getAllRecentMovements } from '@/lib/admin/inventory-data';
 import { AdminShell } from '../_components/AdminShell';
 import { actionAdjustStock } from './actions';
+import { formatDateTimeVN } from '@/lib/time';
 
 const STATUS_LABEL: Record<string, string> = {
   out: 'Hết hàng',
@@ -108,7 +109,7 @@ export default async function AdminInventoryPage() {
                   <td>{m.stock_after}</td>
                   <td style={{ fontSize: 12 }}>{m.reason}</td>
                   <td style={{ fontSize: 12, color: '#888' }}>{m.admin_note ?? '–'}</td>
-                  <td style={{ fontSize: 12 }}>{new Date(m.created_at).toLocaleString('vi-VN')}</td>
+                  <td style={{ fontSize: 12 }}>{formatDateTimeVN(m.created_at)}</td>
                 </tr>
               ))}
             </tbody>

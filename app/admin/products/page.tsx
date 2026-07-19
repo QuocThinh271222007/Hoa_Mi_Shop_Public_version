@@ -10,9 +10,10 @@ import { ImageDropzone } from '@/components/admin/ImageDropzone';
 import { ProductGalleryManager, type GalleryImage } from '@/components/admin/product-gallery/ProductGalleryManager';
 import { BUCKETS } from '@/lib/admin/storage';
 import type { AdminProduct } from '@/lib/admin/types';
+import { formatDateVN } from '@/lib/time';
 
 function formatVND(n: number) { return `${n.toLocaleString('vi-VN')}đ`; }
-function formatDate(s: string) { try { return new Date(s).toLocaleDateString('vi-VN'); } catch { return s; } }
+function formatDate(s: string) { try { return formatDateVN(s); } catch { return s; } }
 
 function ProductForm({
   product,
