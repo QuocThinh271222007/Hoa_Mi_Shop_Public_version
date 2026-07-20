@@ -41,7 +41,30 @@
   background: #fff;
   border: 3px solid var(--pink-line);
   border-radius: 24px;
-  overflow: hidden;
+  /* Swipeable gallery: a horizontal scroll-snap track so mobile users can swipe
+     between photos instead of tapping the dots (dots still work as a shortcut).
+     One slide is visible at a time, so desktop looks unchanged. */
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;          /* Firefox */
+  -ms-overflow-style: none;       /* old Edge */
+}
+/* Hide the scrollbar (WebKit/Chromium) — swiping and the dots are the affordance. */
+.product-detail-page__image-frame::-webkit-scrollbar {
+  display: none;
+}
+
+.product-detail-page__slide {
+  position: relative;   /* anchor for next/image fill */
+  flex: 0 0 100%;
+  width: 100%;
+  height: 100%;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
 }
 
 .product-detail-page__dots {

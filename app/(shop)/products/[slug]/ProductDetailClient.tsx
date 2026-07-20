@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { addItem } from "@/lib/shop/cart-store";
 import { isWishlisted, toggleWishlist } from "@/lib/shop/wishlist-store";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser-client";
@@ -87,7 +87,26 @@ export function ProductDetailClient({ product, suggestions }: Props) {
     product.images && product.images.length > 0
       ? product.images
       : [product.image];
-  const activeSrc = images[Math.min(activeImage, images.length - 1)];
+
+  // Swipeable gallery: the frame is a horizontal scroll-snap track, so on mobile
+  // users can swipe between photos instead of having to tap the dots. The dots
+  // stay as an indicator and still jump to a slide.
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  const handleTrackScroll = useCallback(() => {
+    const el = trackRef.current;
+    if (!el || el.clientWidth === 0) return;
+    const idx = Math.round(el.scrollLeft / el.clientWidth);
+    const clamped = Math.min(Math.max(idx, 0), images.length - 1);
+    setActiveImage((prev) => (prev === clamped ? prev : clamped));
+  }, [images.length]);
+
+  const goToImage = useCallback((i: number) => {
+    setActiveImage(i);
+    const el = trackRef.current;
+    if (!el) return;
+    el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+  }, []);
 
   // Stock ceiling: a numeric stock is a hard limit (0 = out of stock); an unknown
   // stock is treated as unlimited so legacy items still work.
@@ -138,15 +157,29 @@ export function ProductDetailClient({ product, suggestions }: Props) {
         <div className="product-detail-page__hero">
           {/* Left: gallery */}
           <div className="product-detail-page__gallery">
-            <div className="product-detail-page__image-frame">
-              <Image
-                src={activeSrc}
-                alt={product.name}
-                fill
-                sizes="(max-width: 640px) calc(100vw - 32px), (max-width: 1024px) 50vw, 54vw"
-                style={{ objectFit: "cover" }}
-                priority
-              />
+            <div
+              className="product-detail-page__image-frame"
+              ref={trackRef}
+              onScroll={handleTrackScroll}
+              role={images.length > 1 ? "region" : undefined}
+              aria-label={images.length > 1 ? "Ảnh sản phẩm — vuốt để xem thêm" : undefined}
+            >
+              {images.map((src, i) => (
+                <div className="product-detail-page__slide" key={i}>
+                  <Image
+                    src={src}
+                    alt={
+                      images.length > 1
+                        ? `${product.name} — ảnh ${i + 1}/${images.length}`
+                        : product.name
+                    }
+                    fill
+                    sizes="(max-width: 640px) calc(100vw - 32px), (max-width: 1024px) 50vw, 54vw"
+                    style={{ objectFit: "cover" }}
+                    priority={i === 0}
+                  />
+                </div>
+              ))}
             </div>
             {images.length > 1 && (
               <div className="product-detail-page__dots">
@@ -155,7 +188,7 @@ export function ProductDetailClient({ product, suggestions }: Props) {
                     key={i}
                     type="button"
                     className={`product-detail-page__dot${i === activeImage ? " product-detail-page__dot--active" : ""}`}
-                    onClick={() => setActiveImage(i)}
+                    onClick={() => goToImage(i)}
                     aria-label={`Xem ảnh ${i + 1}`}
                     aria-current={i === activeImage}
                   />
