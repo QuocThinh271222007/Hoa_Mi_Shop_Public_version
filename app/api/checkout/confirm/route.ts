@@ -28,6 +28,7 @@ import { applyOrderStock } from '@/lib/admin/order-stock';
 import { countDiscountUsageForPaidOrder } from '@/lib/payments/discount-usage';
 import { incrementSePayQuota, currentQuotaMonth } from '@/lib/payments/provider-quota';
 import { sendPurchaseForOrder } from '@/lib/analytics/ga-server';
+import { isBeyondRecordingGrace } from '@/lib/payments/order-expiry';
 
 const WRONG_CONTENT_MESSAGE =
   'Chúng mình đã nhận được một giao dịch nhưng nội dung hoặc số tiền chưa khớp. ' +
@@ -37,6 +38,11 @@ const NOT_PAID_MESSAGE =
   'một chút rồi thử lại; nếu chưa, vui lòng hoàn tất chuyển khoản đúng nội dung và số tiền.';
 const SESSION_INVALID_MESSAGE =
   'Phiên thanh toán không hợp lệ hoặc đã hết hạn. Vui lòng đặt lại đơn hàng.';
+const MANUAL_PENDING_MESSAGE =
+  'Đã ghi nhận yêu cầu của bạn. Đơn hàng đang chờ shop xác nhận chuyển khoản thủ công — ' +
+  'bạn có thể theo dõi trạng thái trong Lịch sử đơn hàng.';
+const EXPIRED_MESSAGE =
+  'Đơn hàng này đã quá hạn thanh toán (3 ngày) và không còn hiệu lực. Vui lòng đặt lại đơn hàng mới.';
 
 type ExistingOrder = {
   id: string;
@@ -45,6 +51,7 @@ type ExistingOrder = {
   status: string;
   total_amount: number;
   payment_code: string | null;
+  created_at: string | null;
 };
 
 type PaymentRequestRow = {
@@ -98,7 +105,7 @@ export async function POST(req: NextRequest) {
     // payment_code, scoped to this user (never trust client-supplied ids).
     const { data: existingOrderData } = await db
       .from('orders')
-      .select('id, user_id, payment_status, status, total_amount, payment_code')
+      .select('id, user_id, payment_status, status, total_amount, payment_code, created_at')
       .eq('payment_code', code)
       .eq('user_id', user.id)
       .maybeSingle();
@@ -141,6 +148,64 @@ export async function POST(req: NextRequest) {
     // Stored amount — never recompute at confirm-time (avoids false amount
     // mismatches if a product price/discount changed between prepare and confirm).
     const storedAmount = paymentRequest?.amount ?? existingOrder.total_amount;
+
+    // ── P4. Recording window ──
+    // We deliberately do NOT reject on payment_requests.expires_at (~30 min): that
+    // is only the auto-confirm window, and a late transfer is still real money.
+    // The order dies only after the 3-day grace period.
+    if (isBeyondRecordingGrace(existingOrder.created_at)) {
+      return NextResponse.json(
+        { ok: false, status: 'expired', message: EXPIRED_MESSAGE },
+        { status: 200 },
+      );
+    }
+
+    // ── P2 / P3. Manual mode never auto-confirms ──
+    // Only sepay_auto requests may be settled by this route. A manual-mode request
+    // (SePay disabled, or the monthly auto-confirm quota is used up) is RECORDED for
+    // admin review instead — and the customer is told exactly that, rather than the
+    // misleading red "chưa ghi nhận giao dịch" the SePay-centric path would return.
+    const paymentMode = paymentRequest?.payment_mode ?? 'manual_bank_transfer';
+    if (paymentMode !== 'sepay_auto') {
+      const now = new Date().toISOString();
+      await db.from('orders').update({
+        payment_status:                'awaiting_verification',
+        customer_reported_transfer_at: now,
+        updated_at:                    now,
+      } as never).eq('id', orderId);
+
+      if (paymentRequestId) {
+        await db.from('payment_requests').update({
+          status:                        'awaiting_verification',
+          customer_reported_transfer_at: now,
+          updated_at:                    now,
+        } as never).eq('id', paymentRequestId);
+      }
+
+      // If the money is already visible, link it so admin sees "tiền đã về" —
+      // still without confirming (that stays an explicit admin decision).
+      const manualMatch = await findSePayMatch(db, code, storedAmount);
+      if (manualMatch.outcome === 'paid') {
+        await db.from('bank_transactions').update({
+          status:                     'matched_pending_admin',
+          matched_order_id:           orderId,
+          matched_payment_request_id: paymentRequestId,
+        } as never)
+          .eq('id', manualMatch.transaction.id)
+          .in('status', ['unmatched']);
+        if (paymentRequestId) {
+          await db.from('payment_requests').update({
+            provider_status: 'matched_pending_admin',
+            updated_at:      now,
+          } as never).eq('id', paymentRequestId);
+        }
+      }
+
+      return NextResponse.json(
+        { ok: true, status: 'pending_admin', orderId, paymentRequestId, message: MANUAL_PENDING_MESSAGE },
+        { status: 200 },
+      );
+    }
 
     // ── Reconcile against SePay bank_transactions ──
     // Retry a few times to absorb webhook lag (bank → SePay → our webhook can take

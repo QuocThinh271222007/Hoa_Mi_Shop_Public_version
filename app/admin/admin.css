@@ -223,6 +223,86 @@
   min-width: 480px;
 }
 
+/* ── Vertically scrollable table body ──────────────────────────────────────
+   Goes INSIDE .admin-table-wrap. The wrap keeps its scaleY(-1) flip (which is
+   what puts the horizontal scrollbar on TOP); this inner box flips back, so the
+   two transforms cancel out and its own vertical scrollbar drags the normal way.
+   Because the horizontal scrollbar belongs to the OUTER wrap, it stays pinned at
+   the top while the rows scroll inside — exactly the "fixed" bar we want. */
+.admin-table-vscroll {
+  transform: scaleY(-1);
+  max-height: 65vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Grow to the table's width so the OUTER wrap owns horizontal scrolling. */
+  width: max-content;
+  min-width: 100%;
+}
+
+/* The nested flips already cancel out — don't flip the table a second time. */
+.admin-table-wrap .admin-table-vscroll > .admin-table {
+  transform: none;
+}
+
+/* Keep column headers visible while scrolling rows. */
+.admin-table-vscroll .admin-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fff;
+  box-shadow: inset 0 -1px 0 rgba(255, 162, 211, 0.35);
+}
+
+/* ── Pagination ───────────────────────────────────────────────────────────── */
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.admin-pagination__info {
+  margin-right: auto;
+  font-size: 12px;
+  color: #888;
+}
+
+.admin-pagination__link {
+  display: inline-block;
+  min-width: 30px;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 162, 211, 0.45);
+  border-radius: 7px;
+  font-size: 12.5px;
+  text-align: center;
+  text-decoration: none;
+  color: #444;
+  background: #fff;
+}
+.admin-pagination__link:hover {
+  background: rgba(255, 162, 211, 0.12);
+}
+
+.admin-pagination__link--active {
+  background: var(--pink, #e8689f);
+  border-color: var(--pink, #e8689f);
+  color: #fff;
+  font-weight: 700;
+}
+
+.admin-pagination__link--disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.admin-pagination__gap {
+  padding: 0 2px;
+  color: #aaa;
+  font-size: 12px;
+}
+
 .admin-table th {
   padding: 9px 14px;
   text-align: left;

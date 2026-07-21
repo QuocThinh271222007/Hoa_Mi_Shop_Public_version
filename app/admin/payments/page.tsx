@@ -6,6 +6,7 @@ import { AdminShell } from '../_components/AdminShell';
 import { StatusBadge } from '../_components/StatusBadge';
 import { actionManualMatch, actionMarkPaid, actionMarkFailed, actionReconcileQuota } from './actions';
 import { currentQuotaMonth } from '@/lib/payments/provider-quota';
+import { expireStaleAwaitingOrders } from '@/lib/payments/order-expiry';
 import { formatDateTimeVN } from '@/lib/time';
 
 function fmt(n: number) { return `${n.toLocaleString('vi-VN')}đ`; }
@@ -28,6 +29,11 @@ export default async function AdminPaymentsPage({
   const sePayEnabled     = process.env.SEPAY_ENABLED === 'true';
   const sePayConfigured  = !!process.env.SEPAY_WEBHOOK_SECRET;
   const defaultQuotaLimit = parseInt(process.env.SEPAY_MONTHLY_FREE_QUOTA ?? '50', 10);
+
+  // Opportunistic sweep: cancel unpaid orders past the 3-day recording window so
+  // the queue below stays real and their discount slots are released. Best-effort —
+  // the scheduled /api/cron/expire-orders route is the primary trigger.
+  await expireStaleAwaitingOrders().catch(() => 0);
 
   const [paymentRequests, transactions, usageSummary] = await Promise.all([
     getPaymentRequests(sp.prStatus ?? 'all', sp.prMode ?? 'all', 'all', sp.q),

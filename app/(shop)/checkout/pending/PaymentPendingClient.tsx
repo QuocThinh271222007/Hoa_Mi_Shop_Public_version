@@ -77,21 +77,35 @@ function CopyIcon() {
 }
 
 // ══════════════════════════════════════════════════════════
-// QR-NEW mode — order does NOT exist yet in DB.
-// Created only when customer clicks "Tôi đã chuyển khoản".
+// QR mode — the order ALREADY EXISTS in the DB (created by
+// /api/checkout/prepare with status awaiting_payment). Pressing
+// "Tôi đã chuyển khoản" only asks the server to reconcile it:
+//   • sepay_auto  → settled automatically when the credit is matched
+//   • manual mode → recorded for admin to confirm (pending_admin)
 // ══════════════════════════════════════════════════════════
 function QrNewPending() {
   const router = useRouter();
   const [pending, setPending] = useState<QrPendingStore | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [confirmStatus, setConfirmStatus] = useState<
-    "idle" | "submitting" | "not_paid" | "wrong_content" | "error"
+    | "idle"
+    | "submitting"
+    | "not_paid"
+    | "wrong_content"
+    | "pending_admin"
+    | "expired"
+    | "error"
   >("idle");
   const [confirmMessage, setConfirmMessage] = useState("");
 
-  // Red for "chưa thanh toán" / lỗi; amber for "sai nội dung".
+  // Green when the request was recorded for manual review, amber for a
+  // mismatched transfer, red for "not paid" / expired / errors.
   const confirmColor =
-    confirmStatus === "wrong_content" ? "#b45309" : "#dc2626";
+    confirmStatus === "pending_admin"
+      ? "#15803d"
+      : confirmStatus === "wrong_content"
+        ? "#b45309"
+        : "#dc2626";
 
   const QR_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -152,6 +166,35 @@ function QrNewPending() {
         clearCart();
         router.push(
           data.redirectTo ?? `/checkout/success?orderId=${data.orderId}`,
+        );
+        return;
+      }
+
+      // Manual mode → recorded, waiting for the shop to confirm. This is a
+      // SUCCESS state for the customer: the cart is cleared and the order is
+      // tracked in order history (the shop confirms when back online).
+      if (data.status === "pending_admin") {
+        try {
+          localStorage.removeItem("cuc_qr_pending_v1");
+        } catch {
+          /* ignore */
+        }
+        clearCart();
+        setConfirmStatus("pending_admin");
+        setConfirmMessage(data.message ?? "Đã ghi nhận. Shop sẽ xác nhận sớm nhất.");
+        return;
+      }
+
+      // Past the 3-day recording window → the order is dead, must re-order.
+      if (data.status === "expired") {
+        try {
+          localStorage.removeItem("cuc_qr_pending_v1");
+        } catch {
+          /* ignore */
+        }
+        setConfirmStatus("expired");
+        setConfirmMessage(
+          data.message ?? "Đơn hàng đã quá hạn. Vui lòng đặt lại đơn mới.",
         );
         return;
       }
@@ -402,11 +445,17 @@ function QrNewPending() {
                 className="checkout-page__place-order"
                 style={{ marginTop: 20, fontSize: "clamp(16px, 1.6vw, 22px)" }}
                 onClick={handleConfirm}
-                disabled={confirmStatus === "submitting"}
+                disabled={
+                  confirmStatus === "submitting" ||
+                  confirmStatus === "pending_admin" ||
+                  confirmStatus === "expired"
+                }
               >
                 {confirmStatus === "submitting"
                   ? "Đang tạo đơn hàng…"
-                  : "Tôi đã chuyển khoản"}
+                  : confirmStatus === "pending_admin"
+                    ? "Đã ghi nhận — chờ shop xác nhận"
+                    : "Tôi đã chuyển khoản"}
               </button>
 
               {confirmMessage && (
@@ -416,6 +465,28 @@ function QrNewPending() {
                 >
                   {confirmMessage}
                 </p>
+              )}
+
+              {(confirmStatus === "pending_admin" ||
+                confirmStatus === "expired") && (
+                <Link
+                  href={
+                    confirmStatus === "expired"
+                      ? "/collection"
+                      : "/profile?tab=orders"
+                  }
+                  className="checkout-page__place-order"
+                  style={{
+                    display: "block",
+                    textAlign: "center",
+                    textDecoration: "none",
+                    marginTop: 10,
+                  }}
+                >
+                  {confirmStatus === "expired"
+                    ? "Đặt lại đơn hàng"
+                    : "Xem lịch sử đơn hàng"}
+                </Link>
               )}
             </div>
           </div>

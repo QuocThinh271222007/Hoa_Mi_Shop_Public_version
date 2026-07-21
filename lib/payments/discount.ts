@@ -1,4 +1,5 @@
 import type { createAdminSupabaseClient } from '@/lib/supabase/admin-client';
+import { recordingGraceCutoffIso } from '@/lib/payments/order-expiry';
 
 // Single source of truth for discount validation. Used by both the checkout
 // order-creation route and the /api/discounts/validate endpoint so the amount
@@ -88,11 +89,14 @@ export async function validateDiscountCode(
   // that are still alive (created, awaiting payment) so a slot is effectively
   // reserved from order creation; cancelled/failed orders free it again.
   if (dc.max_uses != null) {
+    // Only orders still inside the recording grace window hold a slot — abandoned
+    // orders past it are cancelled by the expiry sweep and must not block anyone.
     const { count: liveCount } = await db
       .from('orders')
       .select('id', { count: 'exact', head: true })
       .eq('discount_code_id', dc.id)
-      .in('payment_status', ['awaiting_payment', 'awaiting_verification']);
+      .in('payment_status', ['awaiting_payment', 'awaiting_verification'])
+      .gte('created_at', recordingGraceCutoffIso());
     if (dc.use_count + (liveCount ?? 0) >= dc.max_uses) {
       return { ok: false, message: 'Mã giảm giá đã hết lượt sử dụng.' };
     }
@@ -107,12 +111,17 @@ export async function validateDiscountCode(
     // parallel (two tabs) and use a one-per-account code twice, because neither
     // was paid yet at validation time. Count live (awaiting) orders too; a
     // cancelled/failed order releases the code again.
+    // A PAID order always counts. An unpaid one only counts while it is still
+    // inside the recording grace window, so an abandoned attempt never locks the
+    // customer out of the code forever.
     const { count } = await db
       .from('orders')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
       .eq('discount_code_id', dc.id)
-      .in('payment_status', ['paid', 'awaiting_payment', 'awaiting_verification']);
+      .or(
+        `payment_status.eq.paid,and(payment_status.in.(awaiting_payment,awaiting_verification),created_at.gte.${recordingGraceCutoffIso()})`,
+      );
     if ((count ?? 0) > 0) {
       return { ok: false, message: 'Bạn đã sử dụng mã giảm giá này rồi.' };
     }

@@ -56,12 +56,13 @@ export default async function AdminOrdersPage({
     pickupDate?: string;
     pickupFrom?: string;
     pickupTo?: string;
+    page?: string;
   }>;
 }) {
   const { email } = await requireAdmin();
   const sp = await searchParams;
 
-  const orders = await getOrders({
+  const allOrders = await getOrders({
     status: sp.status,
     paymentStatus: sp.payment,
     method: sp.method,
@@ -74,12 +75,45 @@ export default async function AdminOrdersPage({
     pickupTimeTo: sp.pickupTo,
   });
 
+  // ── Pagination (app-layer: the pickup-time filter already runs here) ──
+  const PAGE_SIZE = 20;
+  const total = allOrders.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const requestedPage = parseInt(sp.page ?? "1", 10);
+  const currentPage = Math.min(
+    Math.max(Number.isFinite(requestedPage) ? requestedPage : 1, 1),
+    totalPages,
+  );
+  const firstIndex = (currentPage - 1) * PAGE_SIZE;
+  const orders = allOrders.slice(firstIndex, firstIndex + PAGE_SIZE);
+
+  // Build a page link that preserves every active filter.
+  const pageHref = (page: number) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(sp)) {
+      if (key !== "page" && typeof value === "string" && value) params.set(key, value);
+    }
+    if (page > 1) params.set("page", String(page));
+    const qs = params.toString();
+    return qs ? `/admin/orders?${qs}` : "/admin/orders";
+  };
+
+  // Compact page list: always show first/last, plus a window around the current one.
+  const pageNumbers: (number | "gap")[] = [];
+  for (let p = 1; p <= totalPages; p++) {
+    if (p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1) {
+      pageNumbers.push(p);
+    } else if (pageNumbers[pageNumbers.length - 1] !== "gap") {
+      pageNumbers.push("gap");
+    }
+  }
+
   return (
     <AdminShell email={email} activePath="/admin/orders">
       <header className="admin-header">
         <h1 className="admin-header__title">Orders</h1>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <p className="admin-header__subtitle">{orders.length} đơn hàng</p>
+          <p className="admin-header__subtitle">{total} đơn hàng</p>
           <a
             href="/admin/orders/new"
             className="admin-btn admin-btn--sm admin-btn--primary"
@@ -217,6 +251,7 @@ export default async function AdminOrdersPage({
 
       <section className="admin-section">
         <div className="admin-table-wrap">
+          <div className="admin-table-vscroll">
           <table className="admin-table">
             <thead>
               <tr>
@@ -383,7 +418,53 @@ export default async function AdminOrdersPage({
               )}
             </tbody>
           </table>
+          </div>
         </div>
+
+        {totalPages > 1 && (
+          <nav className="admin-pagination" aria-label="Phân trang đơn hàng">
+            <span className="admin-pagination__info">
+              Trang {currentPage}/{totalPages} · hiển thị{" "}
+              {total === 0 ? 0 : firstIndex + 1}–
+              {Math.min(firstIndex + PAGE_SIZE, total)} / {total}
+            </span>
+
+            <a
+              href={pageHref(currentPage - 1)}
+              className={`admin-pagination__link${currentPage === 1 ? " admin-pagination__link--disabled" : ""}`}
+              aria-label="Trang trước"
+              aria-disabled={currentPage === 1}
+            >
+              ‹
+            </a>
+
+            {pageNumbers.map((p, i) =>
+              p === "gap" ? (
+                <span key={`gap-${i}`} className="admin-pagination__gap">
+                  …
+                </span>
+              ) : (
+                <a
+                  key={p}
+                  href={pageHref(p)}
+                  className={`admin-pagination__link${p === currentPage ? " admin-pagination__link--active" : ""}`}
+                  aria-current={p === currentPage ? "page" : undefined}
+                >
+                  {p}
+                </a>
+              ),
+            )}
+
+            <a
+              href={pageHref(currentPage + 1)}
+              className={`admin-pagination__link${currentPage === totalPages ? " admin-pagination__link--disabled" : ""}`}
+              aria-label="Trang sau"
+              aria-disabled={currentPage === totalPages}
+            >
+              ›
+            </a>
+          </nav>
+        )}
       </section>
     </AdminShell>
   );

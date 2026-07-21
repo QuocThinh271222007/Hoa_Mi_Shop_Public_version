@@ -39,7 +39,10 @@ export async function getOrders(filters?: {
     .from('orders')
     .select(ORDER_FIELDS)
     .order('created_at', { ascending: false })
-    .limit(100);
+    // Fetch a generous window and paginate in the page component. Server-side
+    // .range() can't be used here because the pickup-TIME filter below runs in the
+    // app layer (stored times are text), which would make DB offsets inaccurate.
+    .limit(500);
 
   // Only orders that have entered fulfilment appear here:
   //   • COD → immediately (paid on delivery), or
