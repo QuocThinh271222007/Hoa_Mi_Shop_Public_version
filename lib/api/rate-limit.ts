@@ -16,28 +16,18 @@ export async function rateLimit(
 ): Promise<RateLimitResult> {
   try {
     const db = createAdminSupabaseClient();
-    const sinceIso = new Date(Date.now() - windowSec * 1000).toISOString();
-
-    // Prune this key's expired rows (best-effort, keeps the table small).
-    await db
-      .from('rate_limit_hits')
-      .delete()
-      .eq('bucket', bucket)
-      .eq('identifier', identifier)
-      .lt('created_at', sinceIso);
-
-    const { count } = await db
-      .from('rate_limit_hits')
-      .select('id', { count: 'exact', head: true })
-      .eq('bucket', bucket)
-      .eq('identifier', identifier)
-      .gte('created_at', sinceIso);
-
-    if ((count ?? 0) >= limit) return { ok: false, retryAfterSec: windowSec };
-
-    // Cast: generated Supabase types don't include this additive table yet.
-    await db.from('rate_limit_hits').insert({ bucket, identifier } as never);
-    return { ok: true };
+    // Atomic (R1): prune + count + insert happen inside one SQL function guarded by
+    // a per-key advisory lock. The old count-then-insert let a burst of concurrent
+    // requests all read the same count and all slip through the limit.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (db as any).rpc('check_rate_limit', {
+      p_bucket: bucket,
+      p_identifier: identifier,
+      p_limit: limit,
+      p_window_sec: windowSec,
+    });
+    if (error) return { ok: true };            // fail open on infra errors
+    return data === false ? { ok: false, retryAfterSec: windowSec } : { ok: true };
   } catch {
     return { ok: true };
   }

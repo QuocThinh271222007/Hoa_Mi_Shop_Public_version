@@ -1,3 +1,4 @@
+import 'server-only';
 // SERVER-ONLY reCAPTCHA v2 verification (fetch-based, no dependency).
 // Verifies the token the browser widget produced against Google's siteverify
 // endpoint. If RECAPTCHA_SECRET_KEY is not configured the check is skipped so

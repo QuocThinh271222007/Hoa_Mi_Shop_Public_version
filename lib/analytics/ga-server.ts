@@ -151,6 +151,19 @@ export async function sendPurchaseForOrder(db: Db, orderId: string): Promise<voi
     const { order, items } = loaded;
     if (order.ga_purchase_sent_at) return; // already sent
 
+    // G1 — CLAIM the send slot before calling GA. Setting the flag first, filtered
+    // on `is null`, means only one of two concurrent confirmations wins the claim;
+    // the loser exits without emitting. (Sending first and flagging afterwards let
+    // both emit, duplicating the transaction in GA.)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: claimed } = await (db.from('orders') as any)
+      .update({ ga_purchase_sent_at: new Date().toISOString() })
+      .eq('id', orderId)
+      .is('ga_purchase_sent_at', null)
+      .select('id')
+      .maybeSingle();
+    if (!claimed) return; // another path already sent it
+
     const value = order.total_amount ?? order.subtotal ?? 0;
     const ok = await sendGa4({
       clientId: order.ga_client_id,
@@ -167,12 +180,10 @@ export async function sendPurchaseForOrder(db: Db, orderId: string): Promise<voi
         },
       ],
     });
-    if (ok) {
+    if (!ok) {
+      // Release the claim so a later retry can still report the purchase.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (db.from('orders') as any)
-        .update({ ga_purchase_sent_at: new Date().toISOString() })
-        .eq('id', orderId)
-        .is('ga_purchase_sent_at', null);
+      await (db.from('orders') as any).update({ ga_purchase_sent_at: null }).eq('id', orderId);
     }
   } catch {
     /* never break the caller */
@@ -187,6 +198,16 @@ export async function sendRefundForOrder(db: Db, orderId: string): Promise<void>
     if (!loaded) return;
     const { order, items } = loaded;
     if (order.ga_refund_sent_at) return; // already sent
+
+    // G1 — claim before sending (see sendPurchaseForOrder).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: claimed } = await (db.from('orders') as any)
+      .update({ ga_refund_sent_at: new Date().toISOString() })
+      .eq('id', orderId)
+      .is('ga_refund_sent_at', null)
+      .select('id')
+      .maybeSingle();
+    if (!claimed) return; // another path already sent it
 
     const value = order.total_amount ?? order.subtotal ?? 0;
     const ok = await sendGa4({
@@ -204,12 +225,9 @@ export async function sendRefundForOrder(db: Db, orderId: string): Promise<void>
         },
       ],
     });
-    if (ok) {
+    if (!ok) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (db.from('orders') as any)
-        .update({ ga_refund_sent_at: new Date().toISOString() })
-        .eq('id', orderId)
-        .is('ga_refund_sent_at', null);
+      await (db.from('orders') as any).update({ ga_refund_sent_at: null }).eq('id', orderId);
     }
   } catch {
     /* never break the caller */

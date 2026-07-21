@@ -82,8 +82,20 @@ export async function validateDiscountCode(
   if (dc.expires_at && new Date(dc.expires_at) <= new Date()) {
     return { ok: false, message: 'Mã giảm giá đã hết hạn.' };
   }
-  if (dc.max_uses != null && dc.use_count >= dc.max_uses) {
-    return { ok: false, message: 'Mã giảm giá đã hết lượt sử dụng.' };
+  // D1 — use_count only moves when payment is CONFIRMED, which can be hours after
+  // the order is created. Counting only use_count let N concurrent checkouts all
+  // pass while the code had 1 slot left, overshooting max_uses. Also count orders
+  // that are still alive (created, awaiting payment) so a slot is effectively
+  // reserved from order creation; cancelled/failed orders free it again.
+  if (dc.max_uses != null) {
+    const { count: liveCount } = await db
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('discount_code_id', dc.id)
+      .in('payment_status', ['awaiting_payment', 'awaiting_verification']);
+    if (dc.use_count + (liveCount ?? 0) >= dc.max_uses) {
+      return { ok: false, message: 'Mã giảm giá đã hết lượt sử dụng.' };
+    }
   }
 
   // Per-user check: each code can only be used once per non-admin account,
@@ -91,12 +103,16 @@ export async function validateDiscountCode(
   // Only count PAID orders — pending/awaiting orders that never completed payment
   // should not block the customer from retrying with the same code.
   if (userId && !isAdmin && !dc.is_reusable) {
+    // D2 — counting only PAID orders let the same customer place two orders in
+    // parallel (two tabs) and use a one-per-account code twice, because neither
+    // was paid yet at validation time. Count live (awaiting) orders too; a
+    // cancelled/failed order releases the code again.
     const { count } = await db
       .from('orders')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
       .eq('discount_code_id', dc.id)
-      .eq('payment_status', 'paid');
+      .in('payment_status', ['paid', 'awaiting_payment', 'awaiting_verification']);
     if ((count ?? 0) > 0) {
       return { ok: false, message: 'Bạn đã sử dụng mã giảm giá này rồi.' };
     }

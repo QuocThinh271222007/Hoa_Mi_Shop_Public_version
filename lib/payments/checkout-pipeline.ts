@@ -1,3 +1,4 @@
+import 'server-only';
 // SERVER-ONLY — shared validation/calculation pipeline used by both the QR
 // prepare and confirm routes. Never import in client components.
 //

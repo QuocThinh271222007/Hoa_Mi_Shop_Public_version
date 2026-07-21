@@ -1,3 +1,4 @@
+import 'server-only';
 // SERVER-ONLY. Sends transactional email via the Resend REST API directly
 // (no SDK dependency). Requires RESEND_API_KEY; RESEND_FROM_EMAIL sets the
 // verified sender ("Cúc Họa Mi <no-reply@your-domain>").

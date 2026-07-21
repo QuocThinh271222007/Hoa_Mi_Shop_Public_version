@@ -1,8 +1,10 @@
+import 'server-only';
 // SERVER-ONLY. Never import in client components.
 // Determines whether a new payment request should use SePay auto-confirm
 // or fall back to manual bank transfer, based on the monthly free quota.
 
 import { createAdminSupabaseClient } from '@/lib/supabase/admin-client';
+import { APP_TIME_ZONE } from '@/lib/time';
 
 export interface PaymentModeResult {
   paymentMode: 'sepay_auto' | 'manual_bank_transfer';
@@ -14,9 +16,18 @@ export interface PaymentModeResult {
   usedCount: number;
 }
 
-// Returns current quota month as YYYY-MM in UTC.
+// Returns the current quota month as YYYY-MM in the shop's timezone (Vietnam).
+// Using UTC here put the first 7 hours of each month into the PREVIOUS month's
+// bucket, so quota was counted against — and reconciled on — the wrong row.
 export function currentQuotaMonth(): string {
-  return new Date().toISOString().slice(0, 7);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: APP_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(new Date());
+  const year = parts.find((p) => p.type === 'year')?.value ?? '';
+  const month = parts.find((p) => p.type === 'month')?.value ?? '';
+  return year && month ? `${year}-${month}` : new Date().toISOString().slice(0, 7);
 }
 
 /**
@@ -107,38 +118,20 @@ export async function incrementSePayQuota(
   defaultLimit: number
 ): Promise<void> {
   const db = createAdminSupabaseClient();
-  const now = new Date().toISOString();
-
-  const { data: existing } = await db
-    .from('payment_provider_usage')
-    .select('id, auto_success_count')
-    .eq('provider', provider)
-    .eq('quota_month', quotaMonth)
-    .maybeSingle();
-
-  const row = existing as { id: string; auto_success_count: number } | null;
-
-  if (row) {
-    await db.from('payment_provider_usage').update({
-      auto_success_count: row.auto_success_count + 1,
-      updated_at: now,
-    }).eq('id', row.id);
-  } else {
-    try {
-      await db.from('payment_provider_usage').insert({
-        provider,
-        quota_month: quotaMonth,
-        auto_quota_limit: defaultLimit,
-        auto_success_count: 1,
-        manual_fallback_count: 0,
-      });
-    } catch {
-      // Row was concurrently inserted — increment
-      await db.from('payment_provider_usage').update({
-        auto_success_count: 1,
-        updated_at: now,
-      }).eq('provider', provider).eq('quota_month', quotaMonth);
-    }
+  // Atomic upsert-increment (Q1). The previous read-modify-write silently lost
+  // increments when two auto-confirms ran concurrently, and its `catch` block was
+  // dead code (supabase-js returns { error } instead of throwing), so a duplicate
+  // insert was swallowed and the increment vanished — a direct cause of the quota
+  // drift admins had to reconcile by hand.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (db as any).rpc('increment_provider_quota', {
+    p_provider: provider,
+    p_quota_month: quotaMonth,
+    p_default_limit: defaultLimit,
+  });
+  if (error) {
+    // Never block payment confirmation on quota accounting — log and continue.
+    console.error('increment_provider_quota failed:', error.message);
   }
 }
 
