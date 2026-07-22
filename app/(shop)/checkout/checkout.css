@@ -974,12 +974,41 @@
   background: #fff;
   border: 2px solid var(--pink-line);
   border-radius: 16px;
-  overflow: hidden;
   box-shadow: 0 8px 24px rgba(255, 162, 211, 0.22);
   padding: 4px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  /* Slots = configured times × available days, so this list can get long. Cap its
+     height and scroll instead of letting it grow past the panel/viewport. */
+  max-height: min(300px, 45vh);
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Don't chain the scroll to the page when the list hits its end (mobile). */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pink) rgba(255, 162, 211, 0.15);
+}
+
+/* Slim pink scrollbar (WebKit) so the list looks intentional, not clipped. */
+.checkout-page__time-list::-webkit-scrollbar {
+  width: 8px;
+}
+.checkout-page__time-list::-webkit-scrollbar-track {
+  background: rgba(255, 162, 211, 0.15);
+  border-radius: 999px;
+}
+.checkout-page__time-list::-webkit-scrollbar-thumb {
+  background: var(--pink);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+/* Options must not shrink when the list overflows (flex column default). */
+.checkout-page__time-list > .checkout-page__time-option {
+  flex: 0 0 auto;
 }
 .checkout-page__time-option {
   width: 100%;
