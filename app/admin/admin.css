@@ -359,12 +359,14 @@
 }
 
 .admin-badge--read,
-.admin-badge--done,
 .admin-badge--delivered {
   background: #f0f0f0;
   color: #888;
 }
-
+.admin-badge--done{
+    background-color: mediumspringgreen;
+    color: ghostwhite;
+}
 .admin-check {
   color: var(--pink, #e8689f);
   font-weight: 700;
