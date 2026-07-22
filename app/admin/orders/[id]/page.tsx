@@ -13,12 +13,13 @@ import {
   canAdminMarkDelivered,
   canAdminMarkReturned,
   canAdminMarkRefunded,
+  canAdminRestoreOrder,
   type AdminOrderBucket,
 } from '@/lib/orders/status-mapping';
 import { formatDateTimeVN } from '@/lib/time';
 import { AdminShell } from '../../_components/AdminShell';
 import { StatusBadge } from '../../_components/StatusBadge';
-import { actionUpdateOrderStatus, actionUpdateAdminNote, actionMarkCodPaid, actionMarkReturned, actionMarkRefunded, actionDeleteOrder } from '../actions';
+import { actionUpdateOrderStatus, actionUpdateAdminNote, actionMarkCodPaid, actionMarkReturned, actionMarkRefunded, actionDeleteOrder, actionRestoreOrder } from '../actions';
 import { ConfirmSubmitButton } from '../ConfirmSubmitButton';
 
 function fmt(n: number) { return `${n.toLocaleString('vi-VN')}đ`; }
@@ -203,7 +204,29 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           {canAdminCancelOrder(order) && (
             <LifecycleAction orderId={order.id} value="cancelled" label="✕ Hủy đơn" danger />
           )}
+          {canAdminRestoreOrder(order) && (
+            <form action={actionRestoreOrder} style={{ display: 'inline' }}>
+              <input type="hidden" name="orderId" value={order.id} />
+              <button
+                type="submit"
+                className="admin-btn admin-btn--sm"
+                style={{ background: '#eef6ff', color: '#075985', border: '1px solid #bae6fd' }}
+              >
+                ↺ Khôi phục đơn (về &quot;{paid ? 'Đã xác nhận' : 'Chờ xác nhận'}&quot;)
+              </button>
+            </form>
+          )}
         </div>
+
+        {canAdminRestoreOrder(order) && (
+          <p style={{ fontSize: 12, color: '#075985', marginTop: 8, background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 6, padding: '8px 10px' }}>
+            Lỡ bấm hủy? <strong>Khôi phục đơn</strong> sẽ đưa đơn về{' '}
+            <strong>{paid ? 'Đã xác nhận' : 'Chờ xác nhận'}</strong>
+            {!paid && <> và mở lại yêu cầu thanh toán</>}
+            , đồng thời <strong>đồng bộ lại tồn kho</strong> cho đúng
+            {cod || paid ? ' (trừ kho lại)' : ' (đơn chưa thanh toán nên chưa trừ kho)'}.
+          </p>
+        )}
         <p style={{ fontSize: 11, color: '#bbb', marginTop: 8 }}>
           {cod
             ? 'Đơn COD đi hết vòng đời mà không cần thanh toán trước. Việc xác nhận đã thu tiền được thực hiện ở trang Payments sau khi giao.'

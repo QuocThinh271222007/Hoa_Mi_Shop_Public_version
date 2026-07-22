@@ -167,6 +167,12 @@ export function canAdminCancelOrder(order: OrderLike): boolean {
   const b = getAdminOrderBucket(order);
   return b !== 'cancelled' && b !== 'delivered' && b !== 'returned';
 }
+// Un-cancel: lets admin undo an accidental cancellation. The order goes back to
+// the state it would be in given its payment (paid → confirmed, otherwise
+// pending) and its stock is re-synced.
+export function canAdminRestoreOrder(order: OrderLike): boolean {
+  return getAdminOrderBucket(order) === 'cancelled';
+}
 // Bank-transfer orders still require a confirmed payment before they can be
 // packed/shipped; COD orders are exempt (money arrives on delivery).
 export function canAdminMarkPacking(order: OrderLike): boolean {

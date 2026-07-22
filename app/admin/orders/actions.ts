@@ -69,6 +69,69 @@ export async function actionDeleteOrder(formData: FormData) {
   redirect('/admin/orders');
 }
 
+// Undo an accidental cancellation: put the order back into the state its payment
+// implies, reopen its payment request, and re-sync stock.
+//
+//   paid (or paid_at set) → 'confirmed' + payment_status 'paid'
+//   otherwise             → 'pending'   + payment_status 'awaiting_payment'
+//
+// Stock: an order occupies stock when it is paid, or when it is COD (COD deducts
+// at placement). sync_order_stock is state-based, so this is exact even if the
+// order has been cancelled and restored several times.
+export async function actionRestoreOrder(formData: FormData) {
+  await requireAdmin();
+  const orderId = formData.get('orderId') as string;
+  if (!orderId) return;
+
+  const db = createAdminSupabaseClient();
+  const { data: row } = await db
+    .from('orders')
+    .select('status, payment_status, payment_method, paid_at, confirmed_at')
+    .eq('id', orderId)
+    .single();
+
+  const o = row as {
+    status: string | null; payment_status: string | null; payment_method: string | null;
+    paid_at: string | null; confirmed_at: string | null;
+  } | null;
+  // Only a cancelled order can be restored — never resurrect anything else.
+  if (!o || o.status !== 'cancelled') return;
+
+  const wasPaid = o.payment_status === 'paid' || !!o.paid_at;
+  const isCod = o.payment_method === 'cod';
+  const now = new Date().toISOString();
+
+  const updates: Record<string, unknown> = {
+    status: wasPaid ? 'confirmed' : 'pending',
+    // A cancel forces payment_status to 'cancelled' for unpaid orders; give it back.
+    payment_status: wasPaid ? 'paid' : 'awaiting_payment',
+    cancelled_at: null,
+    // Clear a stale customer cancellation request so the red banner doesn't linger.
+    cancel_requested_at: null,
+    cancel_reason: null,
+    updated_at: now,
+  };
+  if (wasPaid && !o.confirmed_at) updates.confirmed_at = now;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (db.from('orders') as any).update(updates).eq('id', orderId);
+
+  // Reopen the payment request that the cancellation closed (unpaid orders only).
+  if (!wasPaid) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (db.from('payment_requests') as any)
+      .update({ status: 'awaiting_payment', cancelled_at: null, updated_at: now })
+      .eq('order_id', orderId)
+      .eq('status', 'cancelled');
+  }
+
+  await applyOrderStock(orderId, wasPaid || isCod ? 'deduct' : 'restore');
+
+  revalidatePath('/admin/orders');
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath('/admin/payments');
+}
+
 // Mark an order as returned (customer sent goods back, refund not yet issued).
 export async function actionMarkReturned(formData: FormData) {
   await requireAdmin();
