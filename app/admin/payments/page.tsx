@@ -6,7 +6,6 @@ import { AdminShell } from '../_components/AdminShell';
 import { StatusBadge } from '../_components/StatusBadge';
 import { actionManualMatch, actionMarkPaid, actionMarkFailed, actionReconcileQuota } from './actions';
 import { currentQuotaMonth } from '@/lib/payments/provider-quota';
-import { expireStaleAwaitingOrders } from '@/lib/payments/order-expiry';
 import { formatDateTimeVN } from '@/lib/time';
 
 function fmt(n: number) { return `${n.toLocaleString('vi-VN')}đ`; }
@@ -30,10 +29,10 @@ export default async function AdminPaymentsPage({
   const sePayConfigured  = !!process.env.SEPAY_WEBHOOK_SECRET;
   const defaultQuotaLimit = parseInt(process.env.SEPAY_MONTHLY_FREE_QUOTA ?? '50', 10);
 
-  // Opportunistic sweep: cancel unpaid orders past the 3-day recording window so
-  // the queue below stays real and their discount slots are released. Best-effort —
-  // the scheduled /api/cron/expire-orders route is the primary trigger.
-  await expireStaleAwaitingOrders().catch(() => 0);
+  // NOTE: this page used to run the stale-order sweep on every visit. That made a
+  // destructive action (cancelling orders) fire invisibly from a read-only page,
+  // which is how a mis-scoped sweep silently cancelled live COD orders. Expiry now
+  // only runs from the explicit /api/cron/expire-orders endpoint.
 
   const [paymentRequests, transactions, usageSummary] = await Promise.all([
     getPaymentRequests(sp.prStatus ?? 'all', sp.prMode ?? 'all', 'all', sp.q),

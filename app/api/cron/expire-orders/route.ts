@@ -3,8 +3,13 @@ import { expireStaleAwaitingOrders, ORDER_RECORDING_GRACE_DAYS } from '@/lib/pay
 
 // POST|GET /api/cron/expire-orders
 //
-// Cancels unpaid orders older than the recording grace period (3 days), which
-// also releases their discount-code slot and clears the admin Payments queue.
+// Cancels ABANDONED bank/QR checkouts older than the recording grace period
+// (3 days), releasing their discount-code slot and clearing the Payments queue.
+//
+// Scope is deliberately narrow (see lib/payments/order-expiry.ts): COD orders,
+// orders past `pending`, and pickup bookings dated in the future are never
+// touched. This is the ONLY trigger for the sweep — it is intentionally not run
+// from page loads, so a destructive action can never fire from just browsing.
 //
 // Protected by CRON_SECRET (header `x-cron-secret` or `?secret=`). If CRON_SECRET
 // is not configured the endpoint is disabled — never leave a public mutation open.
